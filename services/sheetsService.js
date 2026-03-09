@@ -1,5 +1,33 @@
+const fs = require('fs');
+const path = require('path');
 const { google } = require('googleapis');
-const credentials = require('../credentials.json');
+
+function loadGoogleCredentials() {
+  const rawEnv = process.env.GOOGLE_CREDENTIALS_JSON;
+
+  if (rawEnv && rawEnv.trim()) {
+    try {
+      return JSON.parse(rawEnv);
+    } catch (error) {
+      // suporte opcional: valor em base64
+      try {
+        const decoded = Buffer.from(rawEnv, 'base64').toString('utf8');
+        return JSON.parse(decoded);
+      } catch (error2) {
+        throw new Error('GOOGLE_CREDENTIALS_JSON inválido. Informe um JSON válido (ou base64 de JSON).');
+      }
+    }
+  }
+
+  const localPath = path.resolve(__dirname, '../credentials.json');
+  if (fs.existsSync(localPath)) {
+    return JSON.parse(fs.readFileSync(localPath, 'utf8'));
+  }
+
+  throw new Error('Credenciais do Google Sheets não encontradas. Configure GOOGLE_CREDENTIALS_JSON no ambiente.');
+}
+
+const credentials = loadGoogleCredentials();
 
 const auth = new google.auth.GoogleAuth({
   credentials,
