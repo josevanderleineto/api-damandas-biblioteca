@@ -3,8 +3,6 @@ const fs = require('fs');
 let nodemailer = null;
 
 try {
-  // Dependência opcional: se não estiver instalada, API continua funcionando sem envio.
-  // Para ativar envio: npm i nodemailer
   // eslint-disable-next-line global-require
   nodemailer = require('nodemailer');
 } catch (error) {
@@ -20,8 +18,12 @@ function normalizeSmtpUser(value) {
 }
 
 function normalizeSmtpPass(value) {
-  // Senha de app do Google costuma aparecer em blocos com espaços.
   return String(value || '').replace(/\s+/g, '');
+}
+
+function normalizeEmailFrom(value) {
+  // Remove aspas externas para evitar parse estranho em alguns provedores.
+  return normalize(value).replace(/^"|"$/g, '');
 }
 
 function escapeHtml(value) {
@@ -87,22 +89,14 @@ function getLogoBlocksAndAttachments() {
 
   if (primaryPath && fs.existsSync(primaryPath)) {
     primarySrc = 'cid:logo_primary';
-    attachments.push({
-      filename: 'logo-primary.png',
-      path: primaryPath,
-      cid: 'logo_primary',
-    });
+    attachments.push({ filename: 'logo-primary.png', path: primaryPath, cid: 'logo_primary' });
   } else if (primaryUrl) {
     primarySrc = primaryUrl;
   }
 
   if (secondaryPath && fs.existsSync(secondaryPath)) {
     secondarySrc = 'cid:logo_secondary';
-    attachments.push({
-      filename: 'logo-secondary.png',
-      path: secondaryPath,
-      cid: 'logo_secondary',
-    });
+    attachments.push({ filename: 'logo-secondary.png', path: secondaryPath, cid: 'logo_secondary' });
   } else if (secondaryUrl) {
     secondarySrc = secondaryUrl;
   }
@@ -142,15 +136,12 @@ function buildHtmlEmail({ headline, contextText, demanda, badgeLabel, badgeColor
         <div style="font-size:22px; font-weight:700; line-height:1.25;">Sistema de Biblioteca UniFTC/UNEX</div>
         <div style="font-size:13px; opacity:0.9; margin-top:6px;">Gestão de Demandas</div>
       </div>
-
       <div style="padding:24px; color:#10213d;">
         <div style="display:inline-block; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700; color:#fff; background:${escapeHtml(badgeColor)};">
           ${escapeHtml(badgeLabel)}
         </div>
-
         <h2 style="margin:14px 0 8px; font-size:20px; color:#0f1b6d;">${escapeHtml(headline)}</h2>
         <p style="margin:0 0 18px; color:#405270; font-size:14px;">${escapeHtml(contextText)}</p>
-
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; border:1px solid #edf1f7; border-radius:10px; overflow:hidden;">
           <tr><td style="padding:10px 12px; background:#f8fbff; width:180px; font-weight:700;">Demanda</td><td style="padding:10px 12px;">#${safe.demanda}</td></tr>
           <tr><td style="padding:10px 12px; background:#f8fbff; font-weight:700;">Responsável</td><td style="padding:10px 12px;">${safe.responsavel}</td></tr>
@@ -162,40 +153,30 @@ function buildHtmlEmail({ headline, contextText, demanda, badgeLabel, badgeColor
           <tr><td style="padding:10px 12px; background:#f8fbff; font-weight:700;">Status</td><td style="padding:10px 12px;">${safe.status}</td></tr>
           <tr><td style="padding:10px 12px; background:#f8fbff; font-weight:700;">Prioridade</td><td style="padding:10px 12px;">${safe.prioridade}</td></tr>
         </table>
-
         <p style="margin:20px 0 0; font-size:12px; color:#6d7f9b;">Mensagem automática do Sistema de Biblioteca UniFTC/UNEX.</p>
       </div>
     </div>
-  </div>
-  `;
+  </div>`;
 
   return { html, attachments };
 }
 
 async function testarConexaoSMTP() {
-  if (!isEnabled()) {
-    return { ok: false, reason: getDisabledReason() };
-  }
-
+  if (!isEnabled()) return { ok: false, reason: getDisabledReason() };
   const transporter = getTransporter();
   await transporter.verify();
   return { ok: true };
 }
 
 async function sendEmail({ to, subject, text, html, attachments = [] }) {
-  if (!isEnabled()) {
-    return { sent: false, reason: getDisabledReason() };
-  }
+  if (!isEnabled()) return { sent: false, reason: getDisabledReason() };
 
   const target = normalize(to);
-  if (!isValidEmail(target)) {
-    return { sent: false, reason: 'Email de destino inválido.' };
-  }
+  if (!isValidEmail(target)) return { sent: false, reason: 'Email de destino inválido.' };
 
   const transporter = getTransporter();
-
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
+  const info = await transporter.sendMail({
+    from: normalizeEmailFrom(process.env.EMAIL_FROM),
     to: target,
     subject,
     text,
@@ -203,7 +184,13 @@ async function sendEmail({ to, subject, text, html, attachments = [] }) {
     attachments,
   });
 
-  return { sent: true };
+  return {
+    sent: true,
+    messageId: info.messageId || '',
+    accepted: info.accepted || [],
+    rejected: info.rejected || [],
+    response: info.response || '',
+  };
 }
 
 function buildTextDemanda(demanda) {
@@ -227,14 +214,7 @@ async function enviarNovaDemanda(demanda) {
     badgeLabel: 'NOVA DEMANDA',
     badgeColor: '#00a7ff',
   });
-
-  return sendEmail({
-    to: demanda.email,
-    subject,
-    text,
-    html: payload.html,
-    attachments: payload.attachments,
-  });
+  return sendEmail({ to: demanda.email, subject, text, html: payload.html, attachments: payload.attachments });
 }
 
 async function enviarAtualizacaoDemanda(demanda) {
@@ -247,14 +227,7 @@ async function enviarAtualizacaoDemanda(demanda) {
     badgeLabel: 'ATUALIZAÇÃO',
     badgeColor: '#7f56d9',
   });
-
-  return sendEmail({
-    to: demanda.email,
-    subject,
-    text,
-    html: payload.html,
-    attachments: payload.attachments,
-  });
+  return sendEmail({ to: demanda.email, subject, text, html: payload.html, attachments: payload.attachments });
 }
 
 async function enviarLembretePrazo(demanda, diasRestantes) {
@@ -278,21 +251,16 @@ async function enviarLembretePrazo(demanda, diasRestantes) {
 
   const subject = `Lembrete de prazo (#${demanda.demanda})`;
   const text = `${contexto}\n\n${buildTextDemanda(demanda)}`;
-  const payload = buildHtmlEmail({
-    headline: 'Lembrete de prazo',
-    contextText: contexto,
-    demanda,
-    badgeLabel,
-    badgeColor,
-  });
+  const payload = buildHtmlEmail({ headline: 'Lembrete de prazo', contextText: contexto, demanda, badgeLabel, badgeColor });
+  return sendEmail({ to: demanda.email, subject, text, html: payload.html, attachments: payload.attachments });
+}
 
-  return sendEmail({
-    to: demanda.email,
-    subject,
-    text,
-    html: payload.html,
-    attachments: payload.attachments,
-  });
+async function enviarTesteDireto(emailDestino) {
+  const now = new Date().toLocaleString('pt-BR');
+  const subject = 'Teste de envio - Sistema de Demandas';
+  const text = `Teste de envio executado em ${now}.`;
+  const html = `<div style="font-family:Arial,sans-serif"><h2>Teste de envio</h2><p>Envio executado em ${escapeHtml(now)}.</p></div>`;
+  return sendEmail({ to: emailDestino, subject, text, html });
 }
 
 module.exports = {
@@ -302,4 +270,5 @@ module.exports = {
   enviarNovaDemanda,
   enviarAtualizacaoDemanda,
   enviarLembretePrazo,
+  enviarTesteDireto,
 };

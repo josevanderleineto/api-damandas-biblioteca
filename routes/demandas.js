@@ -5,6 +5,7 @@ const controller = require('../controllers/demandasController');
 
 router.get('/', controller.listar);
 router.post('/notificacoes/testar-smtp', controller.testarSMTP);
+router.post('/notificacoes/teste-envio', controller.testarEnvio);
 router.post('/notificacoes/lembretes', controller.executarLembretes);
 router.get('/:id', controller.buscarPorId);
 router.post('/', controller.criar);

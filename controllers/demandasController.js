@@ -16,11 +16,7 @@ function parseDateBrToDate(dateBr) {
   if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900) return null;
 
   const date = new Date(year, month - 1, day);
-  if (
-    date.getFullYear() !== year
-    || date.getMonth() !== month - 1
-    || date.getDate() !== day
-  ) {
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
     return null;
   }
 
@@ -114,24 +110,15 @@ exports.criar = async (req, res) => {
     const dados = normalizarPayload(req.body || {});
 
     if (!dados.responsavel || !dados.descricao || !dados.prazo) {
-      return res.status(400).json({
-        ok: false,
-        erro: 'Campos obrigatórios: responsavel, descricao, prazo (dd/mm/aaaa).',
-      });
+      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: responsavel, descricao, prazo (dd/mm/aaaa).' });
     }
 
     if (!isValidPrazo(dados.prazo)) {
-      return res.status(400).json({
-        ok: false,
-        erro: 'Prazo inválido. Use formato dd/mm/aaaa.',
-      });
+      return res.status(400).json({ ok: false, erro: 'Prazo inválido. Use formato dd/mm/aaaa.' });
     }
 
     if (!isValidEmail(dados.email)) {
-      return res.status(400).json({
-        ok: false,
-        erro: 'Email inválido.',
-      });
+      return res.status(400).json({ ok: false, erro: 'Email inválido.' });
     }
 
     const linhas = await sheetsService.listar();
@@ -169,13 +156,7 @@ exports.criar = async (req, res) => {
       }
     }
 
-    return res.status(201).json({
-      ok: true,
-      id,
-      rowNumber: insertResult.rowNumber,
-      dataCriacao,
-      notificacao,
-    });
+    return res.status(201).json({ ok: true, id, rowNumber: insertResult.rowNumber, dataCriacao, notificacao });
   } catch (error) {
     return res.status(500).json({ ok: false, erro: error.message });
   }
@@ -187,17 +168,11 @@ exports.atualizar = async (req, res) => {
     const dados = normalizarPayload(req.body || {});
 
     if (dados.prazo && !isValidPrazo(dados.prazo)) {
-      return res.status(400).json({
-        ok: false,
-        erro: 'Prazo inválido. Use formato dd/mm/aaaa.',
-      });
+      return res.status(400).json({ ok: false, erro: 'Prazo inválido. Use formato dd/mm/aaaa.' });
     }
 
     if (dados.email && !isValidEmail(dados.email)) {
-      return res.status(400).json({
-        ok: false,
-        erro: 'Email inválido.',
-      });
+      return res.status(400).json({ ok: false, erro: 'Email inválido.' });
     }
 
     const result = await sheetsService.atualizar(id, dados);
@@ -251,12 +226,21 @@ exports.executarLembretes = async (req, res) => {
 exports.testarSMTP = async (req, res) => {
   try {
     const verify = await notificationService.testarConexaoSMTP();
-    if (!verify.ok) {
-      return res.status(400).json({ ok: false, erro: verify.reason });
-    }
-
+    if (!verify.ok) return res.status(400).json({ ok: false, erro: verify.reason });
     return res.status(200).json({ ok: true, mensagem: 'Conexão SMTP validada com sucesso.' });
   } catch (error) {
     return res.status(500).json({ ok: false, erro: `Falha na conexão SMTP: ${error.message}` });
+  }
+};
+
+exports.testarEnvio = async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    if (!email) return res.status(400).json({ ok: false, erro: 'Informe o campo email no body.' });
+
+    const result = await notificationService.enviarTesteDireto(email);
+    return res.status(200).json({ ok: true, envio: result });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: `Falha no teste de envio: ${error.message}` });
   }
 };
