@@ -44,6 +44,34 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isWeekend(date) {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+function nextBusinessRunDateFromNow() {
+  const now = new Date();
+  const next = new Date(now);
+
+  next.setHours(10, 0, 0, 0);
+
+  // Se já passou de 10h, agenda para o próximo dia.
+  if (now.getTime() >= next.getTime()) {
+    next.setDate(next.getDate() + 1);
+  }
+
+  // Pula sábado/domingo.
+  while (isWeekend(next)) {
+    next.setDate(next.getDate() + 1);
+  }
+
+  return next;
+}
+
+function formatDateTimeLocal(date) {
+  return date.toLocaleString('pt-BR');
+}
+
 async function executarLembretesPrazo() {
   const linhas = await sheetsService.listar();
   const dados = linhas.length > 1 ? linhas.slice(1) : [];
@@ -107,18 +135,27 @@ async function executarLembretesPrazo() {
 }
 
 function iniciarAgendadorLembretes() {
-  const intervalMinutes = Number.parseInt(process.env.REMINDER_INTERVAL_MINUTES || '60', 10);
-  const intervalMs = Number.isNaN(intervalMinutes) || intervalMinutes <= 0
-    ? 60 * 60 * 1000
-    : intervalMinutes * 60 * 1000;
+  const scheduleNext = () => {
+    const nextRun = nextBusinessRunDateFromNow();
+    const delay = Math.max(1000, nextRun.getTime() - Date.now());
 
-  setInterval(async () => {
-    try {
-      await executarLembretesPrazo();
-    } catch (error) {
-      // evita derrubar servidor por erro de agendamento
-    }
-  }, intervalMs);
+    console.log(`[lembretes] próximo ciclo: ${formatDateTimeLocal(nextRun)} (dias úteis às 10:00)`);
+
+    setTimeout(async () => {
+      try {
+        if (!isWeekend(new Date())) {
+          const result = await executarLembretesPrazo();
+          console.log(`[lembretes] ciclo executado: avaliadas=${result.avaliadas}, enviadas=${result.enviadas}, ignoradas=${result.ignoradas}`);
+        }
+      } catch (error) {
+        console.error(`[lembretes] falha no ciclo: ${error.message}`);
+      } finally {
+        scheduleNext();
+      }
+    }, delay);
+  };
+
+  scheduleNext();
 }
 
 module.exports = {

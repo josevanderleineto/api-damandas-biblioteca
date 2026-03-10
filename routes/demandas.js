@@ -1,15 +1,23 @@
 const express = require('express');
+const controller = require('../controllers/demandasController');
+const { authenticateToken, requireRole } = require('../middlewares/authMiddleware');
+
 const router = express.Router();
 
-const controller = require('../controllers/demandasController');
+router.use(authenticateToken);
 
-router.get('/', controller.listar);
-router.post('/notificacoes/testar-smtp', controller.testarSMTP);
-router.post('/notificacoes/teste-envio', controller.testarEnvio);
-router.post('/notificacoes/lembretes', controller.executarLembretes);
-router.get('/:id', controller.buscarPorId);
-router.post('/', controller.criar);
-router.put('/:id', controller.atualizar);
-router.delete('/:id', controller.remover);
+router.get('/', requireRole('admin', 'root', 'colaborador'), controller.listar);
+router.get('/prazo-solicitacoes', requireRole('admin', 'root'), controller.listarSolicitacoesProrrogacao);
+router.patch('/prazo-solicitacoes/:requestId', requireRole('admin', 'root'), controller.decidirSolicitacaoProrrogacao);
+
+router.post('/notificacoes/testar-smtp', requireRole('admin', 'root'), controller.testarSMTP);
+router.post('/notificacoes/teste-envio', requireRole('admin', 'root'), controller.testarEnvio);
+router.post('/notificacoes/lembretes', requireRole('admin', 'root'), controller.executarLembretes);
+
+router.post('/', requireRole('admin', 'root'), controller.criar);
+router.get('/:id', requireRole('admin', 'root', 'colaborador'), controller.buscarPorId);
+router.put('/:id', requireRole('admin', 'root', 'colaborador'), controller.atualizar);
+router.delete('/:id', requireRole('admin', 'root'), controller.remover);
+router.post('/:id/prazo-solicitacao', requireRole('colaborador'), controller.solicitarProrrogacao);
 
 module.exports = router;

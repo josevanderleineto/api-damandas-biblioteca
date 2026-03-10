@@ -2,6 +2,15 @@ const sheetsService = require('../services/sheetsService');
 const gerarId = require('../utils/gerarId');
 const notificationService = require('../services/notificationService');
 const reminderService = require('../services/reminderService');
+const db = require('../db/pool');
+
+function normalize(value) {
+  return String(value || '').trim();
+}
+
+function normalizeEmail(value) {
+  return normalize(value).toLowerCase();
+}
 
 function parseDateBrToDate(dateBr) {
   if (!dateBr || typeof dateBr !== 'string') return null;
@@ -73,6 +82,24 @@ function mapLinhaParaDemanda(linha) {
   };
 }
 
+function isAdminRole(role) {
+  return ['admin', 'root'].includes(normalize(role).toLowerCase());
+}
+
+function userCanAccessDemand(user, demanda) {
+  if (!user || !demanda) return false;
+  if (isAdminRole(user.role)) return true;
+  return normalizeEmail(user.email) === normalizeEmail(demanda.email);
+}
+
+function collaboratorAllowedUpdate(dados) {
+  return {
+    status: dados.status,
+    conclusao: dados.conclusao,
+    tempoExecucao: dados.tempoExecucao,
+  };
+}
+
 exports.listar = async (req, res) => {
   try {
     const linhas = await sheetsService.listar();
@@ -82,7 +109,12 @@ exports.listar = async (req, res) => {
     }
 
     const [cabecalho, ...dados] = linhas;
-    const resultado = dados.map(mapLinhaParaDemanda);
+    let resultado = dados.map(mapLinhaParaDemanda);
+
+    if (!isAdminRole(req.user.role)) {
+      const email = normalizeEmail(req.user.email);
+      resultado = resultado.filter((d) => normalizeEmail(d.email) === email);
+    }
 
     return res.json({ cabecalho, total: resultado.length, dados: resultado });
   } catch (error) {
@@ -97,6 +129,10 @@ exports.buscarPorId = async (req, res) => {
 
     if (!demanda) {
       return res.status(404).json({ ok: false, erro: `Demanda "${id}" não encontrada.` });
+    }
+
+    if (!userCanAccessDemand(req.user, demanda)) {
+      return res.status(403).json({ ok: false, erro: 'Acesso negado a esta demanda.' });
     }
 
     return res.json({ ok: true, demanda });
@@ -165,7 +201,20 @@ exports.criar = async (req, res) => {
 exports.atualizar = async (req, res) => {
   try {
     const { id } = req.params;
-    const dados = normalizarPayload(req.body || {});
+    const dadosRaw = normalizarPayload(req.body || {});
+
+    const demandaAtual = await sheetsService.buscarPorId(id);
+    if (!demandaAtual) {
+      return res.status(404).json({ ok: false, erro: `Demanda "${id}" não encontrada.` });
+    }
+
+    if (!userCanAccessDemand(req.user, demandaAtual)) {
+      return res.status(403).json({ ok: false, erro: 'Acesso negado a esta demanda.' });
+    }
+
+    const dados = !isAdminRole(req.user.role)
+      ? collaboratorAllowedUpdate(dadosRaw)
+      : dadosRaw;
 
     if (dados.prazo && !isValidPrazo(dados.prazo)) {
       return res.status(400).json({ ok: false, erro: 'Prazo inválido. Use formato dd/mm/aaaa.' });
@@ -189,9 +238,6 @@ exports.atualizar = async (req, res) => {
 
     return res.status(200).json({ ok: true, ...result, notificacao });
   } catch (error) {
-    if (error.message.includes('não encontrada')) {
-      return res.status(404).json({ ok: false, erro: error.message });
-    }
     return res.status(500).json({ ok: false, erro: error.message });
   }
 };
@@ -242,5 +288,121 @@ exports.testarEnvio = async (req, res) => {
     return res.status(200).json({ ok: true, envio: result });
   } catch (error) {
     return res.status(500).json({ ok: false, erro: `Falha no teste de envio: ${error.message}` });
+  }
+};
+
+exports.solicitarProrrogacao = async (req, res) => {
+  try {
+    if (isAdminRole(req.user.role)) {
+      return res.status(403).json({ ok: false, erro: 'Apenas colaboradores podem solicitar prorrogação.' });
+    }
+
+    const demandaId = normalize(req.params?.id);
+    const prazoSolicitado = normalize(req.body?.prazoSolicitado);
+    const motivo = normalize(req.body?.motivo);
+
+    if (!demandaId || !prazoSolicitado || !motivo) {
+      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: prazoSolicitado, motivo.' });
+    }
+
+    if (!isValidPrazo(prazoSolicitado)) {
+      return res.status(400).json({ ok: false, erro: 'prazoSolicitado inválido. Use dd/mm/aaaa.' });
+    }
+
+    const demanda = await sheetsService.buscarPorId(demandaId);
+    if (!demanda) {
+      return res.status(404).json({ ok: false, erro: 'Demanda não encontrada.' });
+    }
+
+    if (!userCanAccessDemand(req.user, demanda)) {
+      return res.status(403).json({ ok: false, erro: 'Você só pode solicitar prorrogação para suas demandas.' });
+    }
+
+    const result = await db.query(
+      `INSERT INTO prazo_requests (
+         demanda_id, requester_user_id, requester_email,
+         prazo_atual, prazo_solicitado, motivo
+       ) VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, demanda_id, prazo_atual, prazo_solicitado, motivo, status, created_at`,
+      [demandaId, req.user.id, normalizeEmail(req.user.email), demanda.prazo || '', prazoSolicitado, motivo]
+    );
+
+    return res.status(201).json({ ok: true, solicitacao: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
+  }
+};
+
+exports.listarSolicitacoesProrrogacao = async (req, res) => {
+  try {
+    const onlyPending = String(req.query?.pending || '').toLowerCase() === 'true';
+
+    const query = onlyPending
+      ? `SELECT id, demanda_id, requester_email, prazo_atual, prazo_solicitado, motivo, status, admin_note, created_at, decided_at
+           FROM prazo_requests
+          WHERE status = 'pending'
+          ORDER BY created_at DESC`
+      : `SELECT id, demanda_id, requester_email, prazo_atual, prazo_solicitado, motivo, status, admin_note, created_at, decided_at
+           FROM prazo_requests
+          ORDER BY created_at DESC`;
+
+    const result = await db.query(query);
+
+    return res.json({ ok: true, total: result.rows.length, dados: result.rows });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
+  }
+};
+
+exports.decidirSolicitacaoProrrogacao = async (req, res) => {
+  try {
+    const requestId = Number.parseInt(req.params?.requestId, 10);
+    const status = normalize(req.body?.status).toLowerCase();
+    const adminNote = normalize(req.body?.adminNote);
+
+    if (!Number.isInteger(requestId) || requestId <= 0) {
+      return res.status(400).json({ ok: false, erro: 'requestId inválido.' });
+    }
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ ok: false, erro: 'status inválido. Use approved ou rejected.' });
+    }
+
+    const find = await db.query(
+      `SELECT id, demanda_id, prazo_solicitado, status
+         FROM prazo_requests
+        WHERE id = $1`,
+      [requestId]
+    );
+
+    const reqRow = find.rows[0];
+    if (!reqRow) {
+      return res.status(404).json({ ok: false, erro: 'Solicitação não encontrada.' });
+    }
+
+    if (reqRow.status !== 'pending') {
+      return res.status(409).json({ ok: false, erro: 'Solicitação já foi decidida.' });
+    }
+
+    if (status === 'approved') {
+      await sheetsService.atualizar(reqRow.demanda_id, {
+        prazo: reqRow.prazo_solicitado,
+      });
+    }
+
+    const updated = await db.query(
+      `UPDATE prazo_requests
+          SET status = $1,
+              admin_note = $2,
+              decided_by = $3,
+              decided_at = NOW()
+        WHERE id = $4
+      RETURNING id, demanda_id, prazo_atual, prazo_solicitado, motivo, status, admin_note, created_at, decided_at`,
+      [status, adminNote || null, req.user.id, requestId]
+    );
+
+    return res.json({ ok: true, solicitacao: updated.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
   }
 };

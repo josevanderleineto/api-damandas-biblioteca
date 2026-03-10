@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema de Demandas - Biblioteca</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="bg-shape bg-shape-1"></div>
+  <div class="bg-shape bg-shape-2"></div>
+
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>Sistema de Demandas</h1>
+        <p>Biblioteca UniFTC/UNEX</p>
+      </div>
+      <div class="topbar-actions">
+        <span id="userBadge" class="badge hidden"></span>
+        <button id="logoutBtn" class="btn ghost hidden">Sair</button>
+      </div>
+    </header>
+
+    <section id="alerts"></section>
+
+    <section id="authView" class="grid two hidden">
+      <article class="card">
+        <h2>Entrar</h2>
+        <form id="loginForm" class="form">
+          <label>Email
+            <input type="email" name="email" required />
+          </label>
+          <label>Senha
+            <input type="password" name="senha" required />
+          </label>
+          <button class="btn primary" type="submit">Entrar</button>
+        </form>
+      </article>
+    </section>
+
+    <section id="adminView" class="hidden">
+      <div class="grid two">
+        <article class="card">
+          <h2>Nova Demanda</h2>
+          <form id="createDemandForm" class="form">
+            <label>Responsável
+              <input name="responsavel" required />
+            </label>
+            <label>Email do responsável
+              <input type="email" name="email" required />
+            </label>
+            <label>Descrição
+              <textarea name="descricao" rows="3" required></textarea>
+            </label>
+            <label>Matrícula
+              <input name="matricula" />
+            </label>
+            <label>Prazo (dd/mm/aaaa)
+              <input name="prazo" placeholder="10/03/2026" required />
+            </label>
+            <label>Prioridade
+              <input name="prioridade" placeholder="Alta" />
+            </label>
+            <button class="btn primary" type="submit">Criar Demanda</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Criar Usuário</h2>
+          <form id="createUserForm" class="form">
+            <label>Nome
+              <input name="nome" required />
+            </label>
+            <label>Email
+              <input type="email" name="email" required />
+            </label>
+            <label>Senha
+              <input type="password" name="senha" minlength="6" required />
+            </label>
+            <label>Perfil
+              <select name="role">
+                <option value="colaborador">Colaborador</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <button class="btn accent" type="submit">Criar Usuário</button>
+          </form>
+        </article>
+      </div>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Usuários</h2>
+          <button id="refreshUsersBtn" class="btn ghost">Atualizar</button>
+        </div>
+        <div class="table-wrap"><table id="usersTable"></table></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Solicitações de Prorrogação</h2>
+          <button id="refreshRequestsBtn" class="btn ghost">Atualizar</button>
+        </div>
+        <div class="table-wrap"><table id="requestsTable"></table></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Demandas</h2>
+          <button id="refreshDemandsAdminBtn" class="btn ghost">Atualizar</button>
+        </div>
+        <div class="table-wrap"><table id="demandsAdminTable"></table></div>
+      </article>
+    </section>
+
+    <section id="collabView" class="hidden">
+      <article class="card">
+        <div class="card-head">
+          <h2>Minhas Demandas</h2>
+          <button id="refreshDemandsCollabBtn" class="btn ghost">Atualizar</button>
+        </div>
+        <div class="table-wrap"><table id="demandsCollabTable"></table></div>
+      </article>
+
+      <div class="grid two">
+        <article class="card">
+          <h2>Atualizar Status</h2>
+          <form id="updateStatusForm" class="form">
+            <label>ID da Demanda
+              <input name="demandaId" required />
+            </label>
+            <label>Status
+              <select name="status">
+                <option>Pendente</option>
+                <option>Em andamento</option>
+                <option>Concluída</option>
+              </select>
+            </label>
+            <label>Conclusão
+              <input name="conclusao" placeholder="dd/mm/aaaa" />
+            </label>
+            <label>Tempo de Execução
+              <input name="tempoExecucao" placeholder="2 dias" />
+            </label>
+            <button class="btn primary" type="submit">Salvar</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Solicitar Prorrogação</h2>
+          <form id="requestDeadlineForm" class="form">
+            <label>ID da Demanda
+              <input name="demandaId" required />
+            </label>
+            <label>Novo Prazo (dd/mm/aaaa)
+              <input name="prazoSolicitado" required />
+            </label>
+            <label>Motivo
+              <textarea name="motivo" rows="3" required></textarea>
+            </label>
+            <button class="btn accent" type="submit">Enviar Solicitação</button>
+          </form>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
