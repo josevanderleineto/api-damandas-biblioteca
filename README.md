@@ -1,50 +1,38 @@
-# Sistema de Demandas (Biblioteca)
+# Sistema de Demandas da Biblioteca
 
-Aplicativo desktop construído com Electron para apoiar o **controle de demandas da biblioteca**: ele inicia o servidor local, abre o browser em `http://localhost:3000/` e entrega ao usuário final um executável que não exige linha de comando.
+Aplicativo desktop em Electron + API Express para registrar e acompanhar demandas ligadas ao Google Sheets e envio de e-mails via SMTP.
 
-## Releases
-Os instaladores oficiais (Windows `.exe` e macOS `.dmg`) são gerados automaticamente pelo workflow GitHub Actions e ficam disponíveis para download direto na aba **Releases** deste repositório.
+## Uso em localhost (Windows e macOS)
+- A equipe continua usando em `http://localhost:3000`. Scripts rápidos: `Iniciar-Sistema.command` (macOS) ou `npm run desktop:dev`.
+- Documentos: `GUIA-RAPIDO-LOCAL.md` (uso sem terminal) e `GUIA-APP-DESKTOP.md` (build e execução do app desktop).
+- Requisitos: Node.js LTS instalado, `.env` preenchido e `npm install` antes da primeira execução.
 
-## Como baixar o instalador
-1. Acesse a seção **Releases** do GitHub deste projeto.
-2. Baixe o arquivo `.exe` (Windows) ou `.dmg` (macOS) correspondente à build mais recente.
-3. Execute o instalador como qualquer outro aplicativo nativo do sistema.
+## Variáveis de ambiente
+1. Copie `.env.example` para `.env` e edite **antes** de rodar localmente ou no servidor.
+2. Campos essenciais:
+   - Banco/Postgres: `DATABASE_URL`, `DATABASE_SSL` (true/false).
+   - Autenticação: `JWT_SECRET`, `JWT_EXPIRES_IN`, `ROOT_LOGIN`, `ROOT_PASSWORD`.
+   - Google Sheets: `SPREADSHEET_ID`, `SHEET_NAME`, `GOOGLE_CREDENTIALS_JSON` (JSON ou base64). Alternativa: arquivo `credentials.json` na raiz.
+   - SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` (+ URLs/caminhos de logos opcionais).
+   - Lembretes: `REMINDER_INTERVAL_MINUTES` (opcional). Vazio = roda dias úteis às 10:00 (TZ do servidor). Ex.: `720` para lembretes a cada 12h.
+3. Nunca versionar `.env` ou `credentials.json`. Quem clonar pelo GitHub deve criar o próprio `.env` com dados reais da sua planilha, banco e e-mail.
 
-## Instruções para Windows
-1. Baixe o instalador `.exe` no Release mais recente.
-2. Execute o `.exe` e siga os passos do instalador NSIS (`Next > Install`).
-3. Após a instalação, abra o app pelo menu Iniciar ou pelo atalho criado.
-4. O aplicativo abre o navegador automaticamente em `http://localhost:3000/`.
-5. Para desinstalar: `Configurações > Aplicativos` → localize “Sistema de Demandas (Biblioteca)” → remover.
+## Lembretes automáticos
+- O agendador fica em `services/reminderService.js`.
+- Padrão: executa em dias úteis às 10:00 (fuso definido por `TZ`, padrão `America/Bahia` no `ecosystem.config.js`).
+- Novo: se `REMINDER_INTERVAL_MINUTES` estiver definido (>0), o ciclo roda a cada N minutos (pula fins de semana) — útil para lembretes a cada 12h.
+- Evita disparos duplicados no mesmo dia com cache interno. Endpoint manual para admins: `POST /demandas/notificacoes/lembretes`.
 
-Se o Windows SmartScreen bloquear, clique em **Mais informações** e depois em **Executar mesmo assim**.
+## Deploy 24/7 (Google Cloud VM)
+- Recomendo uma VM Linux no Compute Engine para manter os lembretes ativos mesmo quando ninguém estiver com o app aberto.
+- Passo a passo detalhado em `DEPLOY-GCP.md`: instalar Node 20 LTS, configurar `.env`, `npm install --omit=dev`, `npm run db:migrate` e subir com `pm2 start ecosystem.config.js && pm2 save`.
+- Restrinja o acesso à porta 3000 (ou use Nginx/HTTPS) e mantenha `TZ=America/Bahia` para horários corretos.
 
-## Instruções para macOS
-1. Baixe o arquivo `.dmg` da última Release.
-2. Abra o `.dmg` e arraste o app para a pasta **Aplicativos**.
-3. Execute a aplicação a partir de **Aplicativos**; ela vai iniciar o servidor e abrir `http://localhost:3000/` no navegador padrão.
-4. Para remover: delete o app da pasta **Aplicativos** e esvazie a lixeira.
-
-Se o macOS reclamar sobre desenvolvedor desconhecido, abra o app com botão direito e escolha **Abrir**, ou vá em **Ajustes do Sistema > Privacidade e Segurança** para permitir a execução.
-
-## Rodando localmente (desenvolvedores)
-1. Clone o repositório.
-2. Instale as dependências com `npm install`.
-3. Gere a build Electron (para ambiente local ou CI) usando `npm run build`.
-4. Para testar durante o desenvolvimento, use `npm run desktop:dev` para abrir o aplicativo com hot reload.
-
-### Comandos principais
-- `npm install` – instala todas as dependências do backend e do Electron.
-- `npm run build` – empacota o Electron via `electron-builder` (mesma configuração usada pelo CI).
-- `npm run desktop:dev` – inicia o app em modo desenvolvimento.
-
-## Estrutura do projeto
-- `main.cjs` / `electron/` – bootstrap e arquivos do Electron que ligam o renderer ao servidor Express.
-- `server.js` – servidor Express que serve a interface web e responde a `/healthz`.
-- `routes/`, `controllers/`, `middlewares/`, `services/`, `utils/` – lógica da API e integrações da biblioteca.
-- `db/` e `scripts/applySchema.js` – scripts e migrações para banco de dados (SQLite/PostgreSQL, conforme `.env`).
-- `dist-desktop/` – saída dos instaladores gerados por `electron-builder` (não versionada).
-- `.env` / `.env.example` – configurações de porta, banco e credenciais que o app precisa no runtime.
+## Empacotar app desktop
+- Desenvolvimento: `npm run desktop:dev`.
+- Build Windows: `npm run build:win` (gera `.exe` em `dist/`).
+- Build macOS: `npm run build:mac` (gera `.dmg` em `dist/`).
+- Build rápido para o SO atual: `npm run build:all`.
 
 ## Licença
 MIT License.

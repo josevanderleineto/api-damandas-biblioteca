@@ -5,11 +5,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "npm run desktop:build",
     "desktop:dev": "electron .",
-    "desktop:build": "electron-builder --publish never",
-    "desktop:build:mac": "electron-builder --mac --publish never",
-    "desktop:build:win": "electron-builder --win --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:all": "node scripts/build-all.js",
     "db:migrate": "node scripts/applySchema.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -36,7 +35,7 @@
     "appId": "br.com.uniftc.sistemaDemandasBiblioteca",
     "productName": "Sistema de Demandas (Biblioteca)",
     "directories": {
-      "output": "dist-desktop"
+      "output": "dist"
     },
     "files": [
       "**/*",

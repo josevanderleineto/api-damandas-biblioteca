@@ -68,6 +68,21 @@ function nextBusinessRunDateFromNow() {
   return next;
 }
 
+function getIntervalMinutes() {
+  const raw = Number.parseInt(process.env.REMINDER_INTERVAL_MINUTES || '', 10);
+  if (Number.isInteger(raw) && raw > 0) {
+    return raw;
+  }
+  return null;
+}
+
+function nextRunDate(intervalMinutes) {
+  if (intervalMinutes) {
+    return new Date(Date.now() + intervalMinutes * 60 * 1000);
+  }
+  return nextBusinessRunDateFromNow();
+}
+
 function formatDateTimeLocal(date) {
   return date.toLocaleString('pt-BR');
 }
@@ -135,17 +150,25 @@ async function executarLembretesPrazo() {
 }
 
 function iniciarAgendadorLembretes() {
+  const intervalMinutes = getIntervalMinutes();
+
   const scheduleNext = () => {
-    const nextRun = nextBusinessRunDateFromNow();
+    const nextRun = nextRunDate(intervalMinutes);
     const delay = Math.max(1000, nextRun.getTime() - Date.now());
 
-    console.log(`[lembretes] próximo ciclo: ${formatDateTimeLocal(nextRun)} (dias úteis às 10:00)`);
+    const label = intervalMinutes
+      ? `a cada ${intervalMinutes} minuto(s)`
+      : 'dias úteis às 10:00';
+
+    console.log(`[lembretes] próximo ciclo: ${formatDateTimeLocal(nextRun)} (${label})`);
 
     setTimeout(async () => {
       try {
         if (!isWeekend(new Date())) {
           const result = await executarLembretesPrazo();
           console.log(`[lembretes] ciclo executado: avaliadas=${result.avaliadas}, enviadas=${result.enviadas}, ignoradas=${result.ignoradas}`);
+        } else {
+          console.log('[lembretes] fim de semana: ciclo pulado');
         }
       } catch (error) {
         console.error(`[lembretes] falha no ciclo: ${error.message}`);

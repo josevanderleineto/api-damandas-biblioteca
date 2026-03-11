@@ -2,9 +2,19 @@ credentials.json
 .env
 .env.example
 node_modules/
-dist/   
+dist/
+dist-desktop/
 .DS_Store
 npm-debug.log*
-dist-desktop/
-dist/
 *.dmg
+*.exe
+*.app
+# Builds auxiliares e artefatos locais
+dist/win-arm64-unpacked/
+dist/builder-*.yml
+dist/latest.yml
+dist/*.blockmap
+local-server.log
+.local-server.pid
+*.pid
+*.log
