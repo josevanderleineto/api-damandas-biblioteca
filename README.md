@@ -1,96 +1,50 @@
-# API Demandas + App Desktop (Windows/macOS)
+# Sistema de Demandas (Biblioteca)
 
-Este repositório contém o backend (`server.js`) e um **app desktop** que, ao abrir, **inicia o servidor local** e **abre o sistema no navegador** (padrão: `http://localhost:3000/`).
+Aplicativo desktop construído com Electron para apoiar o **controle de demandas da biblioteca**: ele inicia o servidor local, abre o browser em `http://localhost:3000/` e entrega ao usuário final um executável que não exige linha de comando.
 
-## Requisitos
+## Releases
+Os instaladores oficiais (Windows `.exe` e macOS `.dmg`) são gerados automaticamente pelo workflow GitHub Actions e ficam disponíveis para download direto na aba **Releases** deste repositório.
 
-- Node.js instalado
-- `.env` preenchido na pasta do projeto
+## Como baixar o instalador
+1. Acesse a seção **Releases** do GitHub deste projeto.
+2. Baixe o arquivo `.exe` (Windows) ou `.dmg` (macOS) correspondente à build mais recente.
+3. Execute o instalador como qualquer outro aplicativo nativo do sistema.
 
-## Usar local (macOS) sem terminal (1 clique)
+## Instruções para Windows
+1. Baixe o instalador `.exe` no Release mais recente.
+2. Execute o `.exe` e siga os passos do instalador NSIS (`Next > Install`).
+3. Após a instalação, abra o app pelo menu Iniciar ou pelo atalho criado.
+4. O aplicativo abre o navegador automaticamente em `http://localhost:3000/`.
+5. Para desinstalar: `Configurações > Aplicativos` → localize “Sistema de Demandas (Biblioteca)” → remover.
 
-> Se você estiver no macOS e quiser usar sem terminal, use os arquivos `.command`:
+Se o Windows SmartScreen bloquear, clique em **Mais informações** e depois em **Executar mesmo assim**.
 
-- **Iniciar sistema**: duplo clique em `Iniciar-Sistema.command` (abre `http://localhost:3000`)
-- **Parar sistema**: duplo clique em `Parar-Sistema.command`
-- **Abrir no navegador**: duplo clique em `Abrir-Sistema.command`
+## Instruções para macOS
+1. Baixe o arquivo `.dmg` da última Release.
+2. Abra o `.dmg` e arraste o app para a pasta **Aplicativos**.
+3. Execute a aplicação a partir de **Aplicativos**; ela vai iniciar o servidor e abrir `http://localhost:3000/` no navegador padrão.
+4. Para remover: delete o app da pasta **Aplicativos** e esvazie a lixeira.
 
-Observações:
+Se o macOS reclamar sobre desenvolvedor desconhecido, abra o app com botão direito e escolha **Abrir**, ou vá em **Ajustes do Sistema > Privacidade e Segurança** para permitir a execução.
 
-- O script aplica migração de banco automaticamente antes de iniciar.
-- Logs ficam em `local-server.log`.
+## Rodando localmente (desenvolvedores)
+1. Clone o repositório.
+2. Instale as dependências com `npm install`.
+3. Gere a build Electron (para ambiente local ou CI) usando `npm run build`.
+4. Para testar durante o desenvolvimento, use `npm run desktop:dev` para abrir o aplicativo com hot reload.
 
-## App Desktop (Windows e macOS) — sem precisar abrir terminal para usar
+### Comandos principais
+- `npm install` – instala todas as dependências do backend e do Electron.
+- `npm run build` – empacota o Electron via `electron-builder` (mesma configuração usada pelo CI).
+- `npm run desktop:dev` – inicia o app em modo desenvolvimento.
 
-O app desktop serve para o usuário **clicar no aplicativo** e ele:
+## Estrutura do projeto
+- `main.cjs` / `electron/` – bootstrap e arquivos do Electron que ligam o renderer ao servidor Express.
+- `server.js` – servidor Express que serve a interface web e responde a `/healthz`.
+- `routes/`, `controllers/`, `middlewares/`, `services/`, `utils/` – lógica da API e integrações da biblioteca.
+- `db/` e `scripts/applySchema.js` – scripts e migrações para banco de dados (SQLite/PostgreSQL, conforme `.env`).
+- `dist-desktop/` – saída dos instaladores gerados por `electron-builder` (não versionada).
+- `.env` / `.env.example` – configurações de porta, banco e credenciais que o app precisa no runtime.
 
-- inicia o `server.js`
-- espera o endpoint `GET /healthz`
-- abre `http://localhost:3000/` no navegador
-
-### Rodar o app desktop (modo desenvolvimento)
-
-```bash
-npm install
-npm run desktop:dev
-```
-
-### Gerar instaladores
-
-Os instaladores são gerados na pasta `dist-desktop/`.
-
-#### macOS (gera `.dmg`)
-
-```bash
-npm run desktop:build:mac
-```
-
-#### Windows (gera instalador `.exe`/NSIS)
-
-```bash
-npm run desktop:build:win
-```
-
-> Recomendação: gerar o instalador do **Windows no Windows** e o do **macOS no macOS**.
-
-## Manual de instalação (para o usuário final)
-
-### Windows
-
-1. Baixe o instalador (arquivo `.exe`) gerado em `dist-desktop/`.
-2. Dê **duplo clique** no instalador e avance em **Next > Install**.
-3. Abra o app pelo **Menu Iniciar** ou atalho.
-4. O app vai abrir o navegador em `http://localhost:3000/`.
-
-Se aparecer aviso:
-
-- **Windows SmartScreen**: clique em **Mais informações** → **Executar assim mesmo**.
-
-Desinstalar:
-
-- **Configurações > Aplicativos > Aplicativos instalados** → “Sistema de Demandas (Biblioteca)” → **Desinstalar**.
-
-### macOS
-
-1. Baixe o arquivo `.dmg` gerado em `dist-desktop/`.
-2. Abra o `.dmg`.
-3. Arraste o app para **Applications (Aplicativos)**.
-4. Abra o app em **Aplicativos**.
-5. O app vai abrir o navegador em `http://localhost:3000/`.
-
-Se o mac bloquear (desenvolvedor não identificado):
-
-- Clique com botão direito no app → **Abrir** → **Abrir**  
-  ou
-- **Ajustes do Sistema > Privacidade e Segurança** → permitir/abrir mesmo assim.
-
-Desinstalar:
-
-- Apague o app da pasta **Aplicativos**.
-
-## Porta e `.env`
-
-- Porta padrão: `3000`
-- Para mudar: defina `PORT` no `.env`
-- No app empacotado: o `.env` é copiado junto como recurso; você também pode manter um `.env` **ao lado do executável** para facilitar ajustes.
-
+## Licença
+MIT License.

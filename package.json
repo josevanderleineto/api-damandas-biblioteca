@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "build": "npm run desktop:build",
     "desktop:dev": "electron .",
     "desktop:build": "electron-builder --publish never",
     "desktop:build:mac": "electron-builder --mac --publish never",
