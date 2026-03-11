@@ -1,10 +1,14 @@
 {
   "name": "api-demandas",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "desktop:dev": "electron .",
+    "desktop:build": "electron-builder --publish never",
+    "desktop:build:mac": "electron-builder --mac --publish never",
+    "desktop:build:win": "electron-builder --win --publish never",
     "db:migrate": "node scripts/applySchema.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,6 +16,7 @@
   "author": "",
   "license": "ISC",
   "description": "",
+  "private": true,
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -21,5 +26,41 @@
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^6.10.1",
     "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "br.com.uniftc.sistemaDemandasBiblioteca",
+    "productName": "Sistema de Demandas (Biblioteca)",
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "files": [
+      "**/*",
+      "!dist-desktop/**",
+      "!**/.DS_Store"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
   }
 }
