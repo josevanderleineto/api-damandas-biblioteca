@@ -22,6 +22,11 @@
       </div>
     </header>
 
+    <nav id="mainNav" class="tab-bar hidden">
+      <button class="tab-btn active" data-view="demandas">Demandas</button>
+      <button class="tab-btn" data-view="dados">Dados</button>
+    </nav>
+
     <section id="alerts"></section>
 
     <section id="authView" class="grid two hidden">
@@ -164,8 +169,69 @@
         </article>
       </div>
     </section>
+
+    <section id="dashboardView" class="hidden">
+      <div class="grid stats-grid">
+        <article class="card stat-card">
+          <p class="muted">Total de Demandas</p>
+          <strong id="statTotal">0</strong>
+        </article>
+        <article class="card stat-card">
+          <p class="muted">Concluídas</p>
+          <strong id="statDone">0</strong>
+        </article>
+        <article class="card stat-card">
+          <p class="muted">Atrasadas</p>
+          <strong id="statLate">0</strong>
+        </article>
+        <article class="card stat-card">
+          <p class="muted">Prazo ≤ 14 dias</p>
+          <strong id="statSoon">0</strong>
+        </article>
+      </div>
+
+      <div class="grid two">
+        <article class="card">
+          <div class="card-head">
+            <h2>Status das Demandas</h2>
+            <span class="muted" id="statStatusLabel">Atual</span>
+          </div>
+          <canvas id="chartStatus" height="240"></canvas>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <h2>Responsáveis - Top 5</h2>
+            <span class="muted">Distribuição por volume</span>
+          </div>
+          <canvas id="chartResponsaveis" height="240"></canvas>
+        </article>
+      </div>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Prazos</h2>
+          <span class="muted">Atrasadas e próximas 14 dias</span>
+        </div>
+        <canvas id="chartPrazo" height="200"></canvas>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Últimas Demandas</h2>
+          <span class="muted">Atualizado em <span id="dashboardUpdatedAt">--</span></span>
+        </div>
+        <div class="table-wrap"><table id="dashboardTable"></table></div>
+      </article>
+    </section>
   </main>
 
+  <footer class="footer">
+     <span class="divider">|</span>
+    <a href="https://www.vanderleineto.online/" target="_blank" rel="noopener noreferrer">Feito por Vanderlei Neto</a>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

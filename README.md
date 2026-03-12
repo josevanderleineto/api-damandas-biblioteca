@@ -7,6 +7,15 @@ Aplicativo desktop em Electron + API Express para registrar e acompanhar demanda
 - Documentos: `GUIA-RAPIDO-LOCAL.md` (uso sem terminal) e `GUIA-APP-DESKTOP.md` (build e execução do app desktop).
 - Requisitos: Node.js LTS instalado, `.env` preenchido e `npm install` antes da primeira execução.
 
+## Rodar com Docker
+1. Copie `.env.example` para `.env` e preencha. Para usar o Postgres do `docker-compose.yml`, defina `DATABASE_URL=postgresql://api-demandas:api-demandas@db:5432/api-demandas` e `DATABASE_SSL=false`.
+2. Suba tudo: `docker compose up --build -d`. O container aplica o schema do banco (`npm run db:migrate`) e inicia a API em `http://localhost:3000`.
+3. Primeiro acesso: use as credenciais configuradas em `ROOT_LOGIN`/`ROOT_PASSWORD`.
+4. Logs e manutenção:
+   - `docker compose logs -f api` — logs da API.
+   - `docker compose down` — encerra e remove containers (mantém dados no volume `db_data`).
+5. Credenciais do Google: defina `GOOGLE_CREDENTIALS_JSON` no `.env` ou monte um `credentials.json` no caminho `/app/credentials.json` se preferir arquivo.
+
 ## Variáveis de ambiente
 1. Copie `.env.example` para `.env` e edite **antes** de rodar localmente ou no servidor.
 2. Campos essenciais:
@@ -32,7 +41,10 @@ Aplicativo desktop em Electron + API Express para registrar e acompanhar demanda
 - Desenvolvimento: `npm run desktop:dev`.
 - Build Windows: `npm run build:win` (gera `.exe` em `dist/`).
 - Build macOS: `npm run build:mac` (gera `.dmg` em `dist/`).
-- Build rápido para o SO atual: `npm run build:all`.
+- Build para o SO atual: `npm run build:all`.
+- Pré-requisitos de build:
+  - macOS: Xcode CLT instalado. Para distribuir fora do time, assine/notarize conforme políticas Apple (não obrigatório para uso interno).
+  - Windows: ambiente com Node 20 e dependências do `electron-builder`; execute em Windows para gerar o `.exe` assinado com certificado, se houver.
 
 ## Licença
 MIT License.

@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: api-demandas-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: api-demandas
+      POSTGRES_USER: api-demandas
+      POSTGRES_PASSWORD: api-demandas
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api-demandas -d api-demandas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: api-demandas-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      TZ: America/Bahia
+      DATABASE_URL: ${DATABASE_URL:-postgresql://api-demandas:api-demandas@db:5432/api-demandas}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      JWT_SECRET: ${JWT_SECRET:-mude-esta-chave}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      ROOT_LOGIN: ${ROOT_LOGIN:-admin}
+      ROOT_PASSWORD: ${ROOT_PASSWORD:-troque-esta-senha}
+      SPREADSHEET_ID: ${SPREADSHEET_ID:-}
+      SHEET_NAME: ${SHEET_NAME:-DEMANDAS}
+      GOOGLE_CREDENTIALS_JSON: ${GOOGLE_CREDENTIALS_JSON:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Sistema de Demandas <noreply@example.com>}
+      EMAIL_LOGO_PRIMARY_URL: ${EMAIL_LOGO_PRIMARY_URL:-}
+      EMAIL_LOGO_SECONDARY_URL: ${EMAIL_LOGO_SECONDARY_URL:-}
+      EMAIL_LOGO_PRIMARY_PATH: ${EMAIL_LOGO_PRIMARY_PATH:-}
+      EMAIL_LOGO_SECONDARY_PATH: ${EMAIL_LOGO_SECONDARY_PATH:-}
+      REMINDER_INTERVAL_MINUTES: ${REMINDER_INTERVAL_MINUTES:-}
+    volumes:
+      - ./.env:/app/.env:ro
+      # Descomente se preferir usar um arquivo de credenciais local do Google.
+      # - ./credentials.json:/app/credentials.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:

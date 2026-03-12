@@ -100,6 +100,19 @@ function collaboratorAllowedUpdate(dados) {
   };
 }
 
+async function listarEmailsAdminsAtivos() {
+  const result = await db.query(
+    `SELECT email
+       FROM users
+      WHERE role = 'admin'
+        AND ativo = TRUE`
+  );
+
+  return result.rows
+    .map((r) => normalizeEmail(r.email))
+    .filter((email) => email && isValidEmail(email));
+}
+
 exports.listar = async (req, res) => {
   try {
     const linhas = await sheetsService.listar();
@@ -192,7 +205,35 @@ exports.criar = async (req, res) => {
       }
     }
 
-    return res.status(201).json({ ok: true, id, rowNumber: insertResult.rowNumber, dataCriacao, notificacao });
+    let notificacaoAdmins = { total: 0, enviados: 0, falhas: [] };
+    if (notificationService.isEnabled()) {
+      try {
+        const adminEmails = await listarEmailsAdminsAtivos();
+        const destinatarios = adminEmails.filter((email) => email && email !== normalizeEmail(dados.email));
+        notificacaoAdmins.total = destinatarios.length;
+
+        const payload = mapLinhaParaDemanda(linha);
+        const results = await Promise.allSettled(
+          destinatarios.map((email) => notificationService.enviarNovaDemandaAdmin(payload, email))
+        );
+
+        results.forEach((r, idx) => {
+          if (r.status === 'fulfilled' && r.value?.sent) notificacaoAdmins.enviados += 1;
+          else notificacaoAdmins.falhas.push(destinatarios[idx]);
+        });
+      } catch (error) {
+        notificacaoAdmins.falhas.push(`Erro geral: ${error.message}`);
+      }
+    }
+
+    return res.status(201).json({
+      ok: true,
+      id,
+      rowNumber: insertResult.rowNumber,
+      dataCriacao,
+      notificacao,
+      notificacaoAdmins,
+    });
   } catch (error) {
     return res.status(500).json({ ok: false, erro: error.message });
   }

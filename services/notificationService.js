@@ -217,6 +217,19 @@ async function enviarNovaDemanda(demanda) {
   return sendEmail({ to: demanda.email, subject, text, html: payload.html, attachments: payload.attachments });
 }
 
+async function enviarNovaDemandaAdmin(demanda, emailDestino) {
+  const subject = `Cópia para admins - nova demanda (#${demanda.demanda})`;
+  const text = `Uma nova demanda foi criada.\n\n${buildTextDemanda(demanda)}`;
+  const payload = buildHtmlEmail({
+    headline: 'Cópia para administradores',
+    contextText: 'Uma nova demanda foi registrada e você recebe esta cópia por ser admin.',
+    demanda,
+    badgeLabel: 'NOVA DEMANDA',
+    badgeColor: '#0f1b6d',
+  });
+  return sendEmail({ to: emailDestino, subject, text, html: payload.html, attachments: payload.attachments });
+}
+
 async function enviarAtualizacaoDemanda(demanda) {
   const subject = `Atualização da demanda (#${demanda.demanda})`;
   const text = `Sua demanda foi atualizada.\n\n${buildTextDemanda(demanda)}`;
@@ -268,6 +281,7 @@ module.exports = {
   getDisabledReason,
   testarConexaoSMTP,
   enviarNovaDemanda,
+  enviarNovaDemandaAdmin,
   enviarAtualizacaoDemanda,
   enviarLembretePrazo,
   enviarTesteDireto,

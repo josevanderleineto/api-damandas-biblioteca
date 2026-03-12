@@ -1,9 +1,6 @@
 try {
-  // eslint-disable-next-line global-require
   require('dotenv').config();
-} catch (error) {
-  // segue sem dotenv
-}
+} catch (error) {}
 
 const path = require('path');
 const express = require('express');
