@@ -29,3 +29,17 @@ CREATE TABLE IF NOT EXISTS prazo_requests (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_prazo_requests_demanda ON prazo_requests(demanda_id);
 CREATE INDEX IF NOT EXISTS idx_prazo_requests_status ON prazo_requests(status);
+
+-- Controle de notificações para evitar e-mails duplicados
+CREATE TABLE IF NOT EXISTS demanda_notifications (
+  demanda_id TEXT PRIMARY KEY,
+  assignment_hash TEXT,
+  assignment_sent_at TIMESTAMPTZ,
+  last_reminder_key TEXT,
+  last_reminder_sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_demanda_notifications_assignment ON demanda_notifications(assignment_sent_at);
+CREATE INDEX IF NOT EXISTS idx_demanda_notifications_reminder ON demanda_notifications(last_reminder_sent_at);

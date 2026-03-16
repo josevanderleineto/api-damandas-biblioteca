@@ -2,6 +2,7 @@ const sheetsService = require('../services/sheetsService');
 const gerarId = require('../utils/gerarId');
 const notificationService = require('../services/notificationService');
 const reminderService = require('../services/reminderService');
+const notificationRegistry = require('../services/notificationRegistryService');
 const db = require('../db/pool');
 
 function normalize(value) {
@@ -197,9 +198,15 @@ exports.criar = async (req, res) => {
     const insertResult = await sheetsService.inserir(linha);
 
     let notificacao = { sent: false, reason: 'Email não informado.' };
+    const demandaMapeada = mapLinhaParaDemanda(linha);
+
     if (dados.email) {
       try {
-        notificacao = await notificationService.enviarNovaDemanda(mapLinhaParaDemanda(linha));
+        notificacao = await notificationService.enviarNovaDemanda(demandaMapeada);
+        if (notificacao.sent) {
+          const assignmentHash = notificationRegistry.buildAssignmentHash(demandaMapeada);
+          await notificationRegistry.markAssignmentSent(id, assignmentHash);
+        }
       } catch (error) {
         notificacao = { sent: false, reason: `Falha no envio: ${error.message}` };
       }
@@ -299,6 +306,21 @@ exports.remover = async (req, res) => {
 exports.executarLembretes = async (req, res) => {
   try {
     const result = await reminderService.executarLembretesPrazo();
+    return res.status(200).json({
+      ok: true,
+      emailAtivo: notificationService.isEnabled(),
+      motivoEmailInativo: notificationService.isEnabled() ? '' : notificationService.getDisabledReason(),
+      ...result,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
+  }
+};
+
+exports.executarAtribuicoesPlanilha = async (req, res) => {
+  try {
+    const watcher = require('../services/assignmentWatcherService'); // require tardio para evitar ciclos.
+    const result = await watcher.verificarAtribuicoesPendentes();
     return res.status(200).json({
       ok: true,
       emailAtivo: notificationService.isEnabled(),

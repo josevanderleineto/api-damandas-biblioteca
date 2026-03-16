@@ -10,6 +10,7 @@ const demandasRoutes = require('./routes/demandas');
 const authRoutes = require('./routes/auth');
 const reminderService = require('./services/reminderService');
 const notificationService = require('./services/notificationService');
+const assignmentWatcherService = require('./services/assignmentWatcherService');
 
 const app = express();
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
@@ -33,6 +34,7 @@ app.listen(PORT, () => {
   console.log(`API rodando na porta ${PORT}`);
 
   reminderService.iniciarAgendadorLembretes();
+  assignmentWatcherService.iniciarMonitorAtribuicoes();
 
   if (notificationService.isEnabled()) {
     console.log('Notificações por e-mail ativas.');

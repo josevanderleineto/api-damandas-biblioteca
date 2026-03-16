@@ -27,6 +27,7 @@ cp .env.example .env
 ```
 - Preencha `.env`: `DATABASE_URL`, `JWT_SECRET`, `SPREADSHEET_ID`, `GOOGLE_CREDENTIALS_JSON` (JSON ou base64 do service account), `SMTP_*`, `EMAIL_FROM`.
 - Lembretes em 12h: defina `REMINDER_INTERVAL_MINUTES=720`. Para manter o padrão de dias úteis às 10h, deixe vazio.
+- Monitor da planilha: ajuste `ASSIGNMENT_SYNC_INTERVAL_MINUTES` se quiser um intervalo diferente de 5 minutos para disparar e-mails de atribuição inseridos direto no Sheets.
 - Se preferir arquivo, coloque o JSON da credencial em `credentials.json` na raiz.
 
 ## 4) Instalar dependências e aplicar schema
@@ -53,4 +54,3 @@ pm2 logs api-demandas
 ## 7) Backup e atualização
 - Para atualizar: `git pull` e `pm2 restart api-demandas`.
 - Sempre mantenha o `.env` e `credentials.json` fora do controle de versão.
-

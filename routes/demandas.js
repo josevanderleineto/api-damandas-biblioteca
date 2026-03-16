@@ -13,6 +13,7 @@ router.patch('/prazo-solicitacoes/:requestId', requireRole('admin', 'root'), con
 router.post('/notificacoes/testar-smtp', requireRole('admin', 'root'), controller.testarSMTP);
 router.post('/notificacoes/teste-envio', requireRole('admin', 'root'), controller.testarEnvio);
 router.post('/notificacoes/lembretes', requireRole('admin', 'root'), controller.executarLembretes);
+router.post('/notificacoes/atribuicoes', requireRole('admin', 'root'), controller.executarAtribuicoesPlanilha);
 
 router.post('/', requireRole('admin', 'root'), controller.criar);
 router.get('/:id', requireRole('admin', 'root', 'colaborador'), controller.buscarPorId);

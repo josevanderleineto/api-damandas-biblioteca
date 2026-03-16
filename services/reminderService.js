@@ -1,5 +1,6 @@
 const sheetsService = require('./sheetsService');
 const notificationService = require('./notificationService');
+const notificationRegistry = require('./notificationRegistryService');
 
 const reminderSentCache = new Set();
 
@@ -42,6 +43,10 @@ function shouldSkipStatus(status) {
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function buildReminderKey(tipo) {
+  return `${todayKey()}:${tipo}`;
 }
 
 function isWeekend(date) {
@@ -128,9 +133,17 @@ async function executarLembretesPrazo() {
     avaliadas += 1;
 
     const tipo = diasRestantes < 0 ? 'atrasada' : diasRestantes === 0 ? 'vence_hoje' : 'vence_amanha';
-    const key = `${demanda.demanda}:${todayKey()}:${tipo}`;
+    const reminderKey = buildReminderKey(tipo);
+    const cacheKey = `${demanda.demanda}:${reminderKey}`;
 
-    if (reminderSentCache.has(key)) {
+    if (reminderSentCache.has(cacheKey)) {
+      ignoradas += 1;
+      continue;
+    }
+
+    const alreadySent = await notificationRegistry.reminderAlreadySent(demanda.demanda, reminderKey);
+    if (alreadySent) {
+      reminderSentCache.add(cacheKey);
       ignoradas += 1;
       continue;
     }
@@ -138,7 +151,8 @@ async function executarLembretesPrazo() {
     try {
       const result = await notificationService.enviarLembretePrazo(demanda, diasRestantes);
       if (result.sent) {
-        reminderSentCache.add(key);
+        reminderSentCache.add(cacheKey);
+        await notificationRegistry.markReminderSent(demanda.demanda, reminderKey);
         enviadas += 1;
       }
     } catch (error) {
@@ -152,6 +166,19 @@ async function executarLembretesPrazo() {
 function iniciarAgendadorLembretes() {
   const intervalMinutes = getIntervalMinutes();
 
+  const executarCicloAgendado = async () => {
+    try {
+      if (!isWeekend(new Date())) {
+        const result = await executarLembretesPrazo();
+        console.log(`[lembretes] ciclo executado: avaliadas=${result.avaliadas}, enviadas=${result.enviadas}, ignoradas=${result.ignoradas}`);
+      } else {
+        console.log('[lembretes] fim de semana: ciclo pulado');
+      }
+    } catch (error) {
+      console.error(`[lembretes] falha no ciclo: ${error.message}`);
+    }
+  };
+
   const scheduleNext = () => {
     const nextRun = nextRunDate(intervalMinutes);
     const delay = Math.max(1000, nextRun.getTime() - Date.now());
@@ -163,22 +190,18 @@ function iniciarAgendadorLembretes() {
     console.log(`[lembretes] próximo ciclo: ${formatDateTimeLocal(nextRun)} (${label})`);
 
     setTimeout(async () => {
-      try {
-        if (!isWeekend(new Date())) {
-          const result = await executarLembretesPrazo();
-          console.log(`[lembretes] ciclo executado: avaliadas=${result.avaliadas}, enviadas=${result.enviadas}, ignoradas=${result.ignoradas}`);
-        } else {
-          console.log('[lembretes] fim de semana: ciclo pulado');
-        }
-      } catch (error) {
-        console.error(`[lembretes] falha no ciclo: ${error.message}`);
-      } finally {
-        scheduleNext();
-      }
+      await executarCicloAgendado();
+      scheduleNext();
     }, delay);
   };
 
-  scheduleNext();
+  // Executa imediatamente ao iniciar para cobrir atrasos por indisponibilidade do servidor.
+  executarCicloAgendado().then(() => {
+    scheduleNext();
+  }).catch((error) => {
+    console.error(`[lembretes] falha na execução imediata: ${error.message}`);
+    scheduleNext();
+  });
 }
 
 module.exports = {

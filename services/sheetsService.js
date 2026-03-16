@@ -19,9 +19,23 @@ function loadGoogleCredentials() {
     }
   }
 
-  const localPath = path.resolve(__dirname, '../credentials.json');
-  if (fs.existsSync(localPath)) {
-    return JSON.parse(fs.readFileSync(localPath, 'utf8'));
+  const candidateDirs = [
+    process.env.APP_ENV_DIR,
+    process.env.APP_USER_DATA_DIR,
+    process.env.APP_EXE_DIR,
+    process.env.APP_RESOURCES_DIR,
+    process.cwd(),
+    path.resolve(__dirname, '..'),
+  ].filter(Boolean);
+
+  for (const dir of candidateDirs) {
+    const candidatePath = path.join(dir, 'credentials.json');
+    if (!fs.existsSync(candidatePath)) continue;
+    try {
+      return JSON.parse(fs.readFileSync(candidatePath, 'utf8'));
+    } catch (error) {
+      throw new Error(`credentials.json inválido em: ${candidatePath}`);
+    }
   }
 
   throw new Error('Credenciais do Google Sheets não encontradas. Configure GOOGLE_CREDENTIALS_JSON no ambiente.');

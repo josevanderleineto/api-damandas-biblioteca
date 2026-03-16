@@ -45,10 +45,7 @@
     "extraResources": [
       {
         "from": ".env",
-        "to": ".env",
-        "filter": [
-          "**/*"
-        ]
+        "to": ".env"
       }
     ],
     "mac": {
@@ -61,6 +58,14 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }

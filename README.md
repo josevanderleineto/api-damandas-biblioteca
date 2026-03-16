@@ -24,13 +24,20 @@ Aplicativo desktop em Electron + API Express para registrar e acompanhar demanda
    - Google Sheets: `SPREADSHEET_ID`, `SHEET_NAME`, `GOOGLE_CREDENTIALS_JSON` (JSON ou base64). Alternativa: arquivo `credentials.json` na raiz.
    - SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` (+ URLs/caminhos de logos opcionais).
    - Lembretes: `REMINDER_INTERVAL_MINUTES` (opcional). Vazio = roda dias úteis às 10:00 (TZ do servidor). Ex.: `720` para lembretes a cada 12h.
+   - Monitor da planilha: `ASSIGNMENT_SYNC_INTERVAL_MINUTES` (opcional). Padrão 1 minuto para verificar linhas novas/alteradas direto no Google Sheets e disparar o e-mail de atribuição se ainda não foi enviado.
 3. Nunca versionar `.env` ou `credentials.json`. Quem clonar pelo GitHub deve criar o próprio `.env` com dados reais da sua planilha, banco e e-mail.
 
 ## Lembretes automáticos
 - O agendador fica em `services/reminderService.js`.
-- Padrão: executa em dias úteis às 10:00 (fuso definido por `TZ`, padrão `America/Bahia` no `ecosystem.config.js`).
+- Padrão: executa em dias úteis às 10:00 (fuso definido por `TZ`, padrão `America/Bahia` no `ecosystem.config.js`). Na subida do servidor ele roda imediatamente para cobrir atrasos se a máquina ficou desligada.
 - Novo: se `REMINDER_INTERVAL_MINUTES` estiver definido (>0), o ciclo roda a cada N minutos (pula fins de semana) — útil para lembretes a cada 12h.
-- Evita disparos duplicados no mesmo dia com cache interno. Endpoint manual para admins: `POST /demandas/notificacoes/lembretes`.
+- Evita disparos duplicados no mesmo dia com registro no banco. Endpoint manual para admins: `POST /demandas/notificacoes/lembretes`.
+
+## Atribuições criadas direto na planilha
+- Serviço `assignmentWatcherService.js` verifica a planilha a cada `ASSIGNMENT_SYNC_INTERVAL_MINUTES` (padrão 1 min).
+- Se encontrar uma demanda com e-mail válido que ainda não recebeu a notificação de atribuição (ou mudou responsável/e-mail), envia automaticamente.
+- O histórico fica em `demanda_notifications` para evitar e-mails duplicados.
+- Endpoint manual para admins: `POST /demandas/notificacoes/atribuicoes` (útil para forçar o disparo imediato).
 
 ## Deploy 24/7 (Google Cloud VM)
 - Recomendo uma VM Linux no Compute Engine para manter os lembretes ativos mesmo quando ninguém estiver com o app aberto.
