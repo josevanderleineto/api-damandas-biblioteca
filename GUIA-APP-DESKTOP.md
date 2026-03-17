@@ -33,15 +33,34 @@ npm run build:all
 ```
 
 Saídas vão para `dist/` (ex.: `.dmg` ou `.exe`). Não suba esses binários para o GitHub público.
-Para enviar para outra pessoa no Windows, envie o arquivo `*Setup*.exe` gerado dentro de `dist/` (não o `win-unpacked/`).
+No Windows, você terá dois formatos:
+- **Instalador**: arquivo `*Setup*.exe` (recomendado para uso normal).
+- **Portátil**: pasta `win-unpacked/` (executa sem “instalar”; útil quando não há permissão de admin).
 
 ## Porta e `.env` no app empacotado
 - Porta padrão `3000` (ou `PORT` no `.env`). Se a porta estiver ocupada, o app tenta a próxima disponível.
 - No Windows/macOS empacotado, na **primeira execução** o app copia o `.env` empacotado para a pasta de dados do usuário (`userData`) para ficar editável e persistir entre updates.
 - Para usar `credentials.json` em vez de `GOOGLE_CREDENTIALS_JSON`, coloque o arquivo na mesma pasta do `.env` do `userData` (ou ao lado do executável).
 
+## Manual de instalação (Windows) — usuários finais
+> O app é seguro **quando baixado pelo link oficial** informado (ex.: TI/gestão do projeto). Se tiver qualquer dúvida sobre a procedência do arquivo, **não execute** e peça validação para a TI.
+
+### Opção A — Executar sem instalar (pasta `win-unpacked/`)
+Essa opção não instala nada e normalmente não exige permissão de administrador.
+1. Baixe o arquivo/pasta `win-unpacked` pelo link informado (normalmente vem em um `.zip`).
+2. Extraia para uma pasta local (ex.: `C:\SistemaDemandas\`).
+3. Abra a pasta `win-unpacked/`.
+4. Execute o arquivo `.exe` do sistema (ex.: `Sistema de Demandas (Biblioteca).exe`).
+5. O app inicia o servidor local e abre no navegador. Se não abrir, acesse `http://localhost:3000/`.
+
+### Opção B — Instalar (arquivo `*Setup*.exe`)
+1. Baixe o instalador (arquivo `.exe` com “Setup” no nome) pelo link informado.
+2. Execute e siga o assistente.
+3. Se o Windows solicitar permissão de administrador e você não tiver (ou a instalação for bloqueada por política), solicite ajuda da TI.
+
 ## Quando o Windows diz que é “suspeito”
-- Avisos do SmartScreen (“Editor desconhecido”) são esperados em instaladores **não assinados**.
+- Avisos do SmartScreen (“Editor desconhecido”) são esperados em instaladores/`.exe` **não assinados**.
+- Se você baixou do link oficial, clique em “Mais informações” → “Executar mesmo assim”. Se não tiver certeza da origem, pare e peça orientação à TI.
 - Para reduzir/evitar esses avisos em distribuição real, gere o instalador com **assinatura de código** (certificado) e configure o electron-builder com as variáveis `CSC_LINK` e `CSC_KEY_PASSWORD`.
 
 ## Diagnóstico rápido (quando não abre em outra máquina)

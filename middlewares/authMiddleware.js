@@ -37,8 +37,10 @@ function authenticateToken(req, res, next) {
 
 function requireRole(...roles) {
   return (req, res, next) => {
-    const role = normalize(req.user?.role);
-    if (!roles.includes(role)) {
+    const role = normalize(req.user?.role).toLowerCase();
+    const allowed = roles.map((r) => normalize(r).toLowerCase());
+
+    if (!allowed.includes(role)) {
       return res.status(403).json({ ok: false, erro: 'Acesso negado para este perfil.' });
     }
     return next();

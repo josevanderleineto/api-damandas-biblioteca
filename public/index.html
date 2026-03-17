@@ -171,6 +171,61 @@
     </section>
 
     <section id="dashboardView" class="hidden">
+      <article class="card">
+        <div class="card-head">
+          <h2>Filtros</h2>
+          <div class="card-actions">
+            <button id="dashboardClearFiltersBtn" class="btn ghost" type="button">Limpar</button>
+            <button id="dashboardReloadBtn" class="btn ghost" type="button">Recarregar</button>
+          </div>
+        </div>
+        <form id="dashboardFiltersForm" class="form filters-grid">
+          <label>Responsável
+            <select id="dashboardFilterResponsavel"></select>
+          </label>
+          <label>Status
+            <select id="dashboardFilterStatus">
+              <option value="">Todos</option>
+              <option value="pendente">Pendente</option>
+              <option value="andamento">Em andamento</option>
+              <option value="concluida">Concluída</option>
+              <option value="outros">Outros</option>
+            </select>
+          </label>
+          <label>Prioridade
+            <select id="dashboardFilterPrioridade"></select>
+          </label>
+          <label>Prazo
+            <select id="dashboardFilterPrazo">
+              <option value="">Todos</option>
+              <option value="atrasada">Atrasadas</option>
+              <option value="hoje">Vence hoje</option>
+              <option value="ate7">1–7 dias</option>
+              <option value="ate14">8–14 dias</option>
+              <option value="futuro">&gt; 14 dias</option>
+            </select>
+          </label>
+          <label>Criação (de)
+            <input id="dashboardFilterCreatedFrom" type="date" />
+          </label>
+          <label>Criação (até)
+            <input id="dashboardFilterCreatedTo" type="date" />
+          </label>
+          <label class="checkbox">
+            <input id="dashboardFilterOnlyDone" type="checkbox" />
+            Somente concluídas
+          </label>
+          <label class="checkbox">
+            <input id="dashboardFilterOnlyOverdue" type="checkbox" />
+            Somente atrasadas
+          </label>
+          <label>Buscar (ID/descrição/email)
+            <input id="dashboardFilterQuery" placeholder="Ex.: 012, João, pendente..." />
+          </label>
+        </form>
+        <p class="muted" id="dashboardFilterSummary">--</p>
+      </article>
+
       <div class="grid stats-grid">
         <article class="card stat-card">
           <p class="muted">Total de Demandas</p>
@@ -201,8 +256,23 @@
 
         <article class="card">
           <div class="card-head">
-            <h2>Responsáveis - Top 5</h2>
-            <span class="muted">Distribuição por volume</span>
+            <h2>Equipe (Ranking)</h2>
+            <div class="card-actions">
+              <select id="teamMetricSelect">
+                <option value="total">Total</option>
+                <option value="open">Abertas</option>
+                <option value="done">Concluídas</option>
+                <option value="overdueOpen">Atrasadas (abertas)</option>
+                <option value="onTimeRate">No prazo (%)</option>
+                <option value="avgCycleDays">Tempo médio (dias)</option>
+              </select>
+              <select id="teamTopSelect">
+                <option value="5">Top 5</option>
+                <option value="10" selected>Top 10</option>
+                <option value="20">Top 20</option>
+                <option value="0">Todos</option>
+              </select>
+            </div>
           </div>
           <canvas id="chartResponsaveis" height="240"></canvas>
         </article>
@@ -218,7 +288,16 @@
 
       <article class="card">
         <div class="card-head">
-          <h2>Últimas Demandas</h2>
+          <h2>Desempenho por Responsável</h2>
+          <span class="muted">Clique em “Ver” para filtrar</span>
+        </div>
+        <div class="table-wrap"><table id="teamTable"></table></div>
+        <p class="muted">* “No prazo” e “Tempo médio” dependem do preenchimento do campo “Conclusão” (dd/mm/aaaa).</p>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Últimas Demandas (filtrado)</h2>
           <span class="muted">Atualizado em <span id="dashboardUpdatedAt">--</span></span>
         </div>
         <div class="table-wrap"><table id="dashboardTable"></table></div>
