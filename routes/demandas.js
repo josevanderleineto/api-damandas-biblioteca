@@ -18,6 +18,7 @@ router.post('/notificacoes/atribuicoes', requireRole('admin', 'root'), controlle
 router.post('/', requireRole('admin', 'root'), controller.criar);
 router.get('/:id', requireRole('admin', 'root', 'colaborador'), controller.buscarPorId);
 router.put('/:id', requireRole('admin', 'root', 'colaborador'), controller.atualizar);
+router.put('/:id/assign', requireRole('admin', 'root'), controller.atribuirResponsaveis);
 router.delete('/:id', requireRole('admin', 'root'), controller.remover);
 router.post('/:id/prazo-solicitacao', requireRole('colaborador'), controller.solicitarProrrogacao);
 

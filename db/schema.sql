@@ -4,12 +4,24 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
+  matricula TEXT,
   senha_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'colaborador')),
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Compatibilidade: adiciona coluna matricula em bases existentes
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'matricula'
+  ) THEN
+    ALTER TABLE users ADD COLUMN matricula TEXT;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS prazo_requests (
   id BIGSERIAL PRIMARY KEY,

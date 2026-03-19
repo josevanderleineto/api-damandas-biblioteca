@@ -8,6 +8,7 @@ const cors = require('cors');
 
 const demandasRoutes = require('./routes/demandas');
 const authRoutes = require('./routes/auth');
+const organogramaRoutes = require('./routes/organograma');
 const reminderService = require('./services/reminderService');
 const notificationService = require('./services/notificationService');
 const assignmentWatcherService = require('./services/assignmentWatcherService');
@@ -24,6 +25,7 @@ app.get('/healthz', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/demandas', demandasRoutes);
+app.use('/organograma', organogramaRoutes);
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {

@@ -46,11 +46,20 @@ function pick(obj, keys) {
   return '';
 }
 
+function pickRaw(obj, keys) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(obj, key) && obj[key] !== undefined && obj[key] !== null) {
+      return String(obj[key]);
+    }
+  }
+  return '';
+}
+
 function normalizarPayload(body = {}) {
   return {
     responsavel: pick(body, ['responsavel', 'Responsável', 'responsavelNome']),
     descricao: pick(body, ['descricao', 'descrição', 'Descrição da Demanda', 'descricaoDemanda']),
-    matricula: pick(body, ['matricula', 'Matrícula']),
+    matricula: pickRaw(body, ['matricula', 'Matrícula']),
     email: pick(body, ['email', 'Email']),
     prazo: pick(body, ['prazo', 'Prazo']),
     status: pick(body, ['status', 'Status']),
@@ -64,6 +73,58 @@ function normalizarPayload(body = {}) {
 function isValidEmail(email) {
   if (!email) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function splitEmailList(value) {
+  return String(value || '')
+    .split(/[;,|\n\r]/g)
+    .map((v) => String(v || '').trim())
+    .filter(Boolean);
+}
+
+function normalizeEmailList(value) {
+  const seen = new Set();
+  const result = [];
+
+  splitEmailList(value).forEach((email) => {
+    const normalized = normalizeEmail(email);
+    if (isValidEmail(normalized) && !seen.has(normalized)) {
+      seen.add(normalized);
+      result.push(normalized);
+    }
+  });
+
+  return result;
+}
+
+function isValidEmailList(value) {
+  // Mantém compatibilidade: se não foi informado, considera válido.
+  if (!value) return true;
+  const list = normalizeEmailList(value);
+  return list.length > 0;
+}
+
+function demandEmails(demandaEmail) {
+  return normalizeEmailList(demandaEmail);
+}
+
+function emailsToCell(value) {
+  return normalizeEmailList(value).join('; ');
+}
+
+async function carregarUsuariosAtivosPorIds(ids = []) {
+  const unique = Array.from(new Set((Array.isArray(ids) ? ids : []).filter(Boolean)));
+  if (!unique.length) return [];
+
+  const result = await db.query(
+    `SELECT id, nome, email, matricula
+       FROM users
+      WHERE id = ANY($1)
+        AND ativo = TRUE`,
+    [unique]
+  );
+
+  return result.rows || [];
 }
 
 function mapLinhaParaDemanda(linha) {
@@ -90,7 +151,16 @@ function isAdminRole(role) {
 function userCanAccessDemand(user, demanda) {
   if (!user || !demanda) return false;
   if (isAdminRole(user.role)) return true;
-  return normalizeEmail(user.email) === normalizeEmail(demanda.email);
+  const userEmail = normalizeEmail(user.email);
+  const emails = demandEmails(demanda.email);
+  return emails.includes(userEmail);
+}
+
+function isResponsavelPelaDemanda(user, demanda) {
+  if (!user || !demanda) return false;
+  const userEmail = normalizeEmail(user.email);
+  const emails = demandEmails(demanda.email);
+  return emails.includes(userEmail);
 }
 
 function collaboratorAllowedUpdate(dados) {
@@ -126,8 +196,8 @@ exports.listar = async (req, res) => {
     let resultado = dados.map(mapLinhaParaDemanda);
 
     if (!isAdminRole(req.user.role)) {
-      const email = normalizeEmail(req.user.email);
-      resultado = resultado.filter((d) => normalizeEmail(d.email) === email);
+      const userEmail = normalizeEmail(req.user.email);
+      resultado = resultado.filter((d) => demandEmails(d.email).includes(userEmail));
     }
 
     return res.json({ cabecalho, total: resultado.length, dados: resultado });
@@ -159,17 +229,19 @@ exports.criar = async (req, res) => {
   try {
     const dados = normalizarPayload(req.body || {});
 
-    if (!dados.responsavel || !dados.descricao || !dados.prazo) {
-      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: responsavel, descricao, prazo (dd/mm/aaaa).' });
+    if (!dados.responsavel || !dados.descricao || !dados.prazo || !String(dados.matricula || '').trim()) {
+      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: responsavel, descricao, matricula, prazo (dd/mm/aaaa).' });
     }
 
     if (!isValidPrazo(dados.prazo)) {
       return res.status(400).json({ ok: false, erro: 'Prazo inválido. Use formato dd/mm/aaaa.' });
     }
 
-    if (!isValidEmail(dados.email)) {
+    if (!isValidEmailList(dados.email)) {
       return res.status(400).json({ ok: false, erro: 'Email inválido.' });
     }
+
+    const emailsCell = emailsToCell(dados.email);
 
     const linhas = await sheetsService.listar();
     const dadosSemCabecalho = linhas.length > 0 ? linhas.slice(1) : [];
@@ -185,7 +257,7 @@ exports.criar = async (req, res) => {
       dados.responsavel,
       dados.descricao,
       dados.matricula,
-      dados.email,
+      emailsCell,
       dataCriacao,
       dados.prazo,
       dados.status || 'Pendente',
@@ -200,7 +272,7 @@ exports.criar = async (req, res) => {
     let notificacao = { sent: false, reason: 'Email não informado.' };
     const demandaMapeada = mapLinhaParaDemanda(linha);
 
-    if (dados.email) {
+    if (emailsCell) {
       try {
         notificacao = await notificationService.enviarNovaDemanda(demandaMapeada);
         if (notificacao.sent) {
@@ -216,7 +288,8 @@ exports.criar = async (req, res) => {
     if (notificationService.isEnabled()) {
       try {
         const adminEmails = await listarEmailsAdminsAtivos();
-        const destinatarios = adminEmails.filter((email) => email && email !== normalizeEmail(dados.email));
+        const destinatariosDemanda = demandEmails(emailsCell);
+        const destinatarios = adminEmails.filter((email) => email && !destinatariosDemanda.includes(email));
         notificacaoAdmins.total = destinatarios.length;
 
         const payload = mapLinhaParaDemanda(linha);
@@ -260,7 +333,17 @@ exports.atualizar = async (req, res) => {
       return res.status(403).json({ ok: false, erro: 'Acesso negado a esta demanda.' });
     }
 
-    const dados = !isAdminRole(req.user.role)
+    const isAdmin = isAdminRole(req.user.role);
+    const isResponsavel = isResponsavelPelaDemanda(req.user, demandaAtual);
+    if (!isResponsavel && !isAdmin) {
+      return res.status(403).json({ ok: false, erro: 'Acesso negado a esta demanda.' });
+    }
+
+    if (!isResponsavel && typeof dadosRaw.status !== 'undefined') {
+      return res.status(403).json({ ok: false, erro: 'Apenas responsáveis podem alterar o status.' });
+    }
+
+    const dados = !isAdmin
       ? collaboratorAllowedUpdate(dadosRaw)
       : dadosRaw;
 
@@ -268,11 +351,16 @@ exports.atualizar = async (req, res) => {
       return res.status(400).json({ ok: false, erro: 'Prazo inválido. Use formato dd/mm/aaaa.' });
     }
 
-    if (dados.email && !isValidEmail(dados.email)) {
+    if (dados.email && !isValidEmailList(dados.email)) {
       return res.status(400).json({ ok: false, erro: 'Email inválido.' });
     }
 
-    const result = await sheetsService.atualizar(id, dados);
+    const payload =
+      isAdmin && typeof dados.email !== 'undefined'
+        ? { ...dados, email: emailsToCell(dados.email) }
+        : dados;
+
+    const result = await sheetsService.atualizar(id, payload);
     const demandaAtualizada = await sheetsService.buscarPorId(id);
 
     let notificacao = { sent: false, reason: 'Email não informado.' };
@@ -465,6 +553,71 @@ exports.decidirSolicitacaoProrrogacao = async (req, res) => {
     );
 
     return res.json({ ok: true, solicitacao: updated.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
+  }
+};
+
+exports.atribuirResponsaveis = async (req, res) => {
+  try {
+    const demandaId = normalize(req.params?.id);
+    const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
+
+    if (!demandaId || !userIds.length) {
+      return res.status(400).json({ ok: false, erro: 'Informe demanda e ao menos um usuário.' });
+    }
+
+    const demandaAtual = await sheetsService.buscarPorId(demandaId);
+    if (!demandaAtual) {
+      return res.status(404).json({ ok: false, erro: 'Demanda não encontrada.' });
+    }
+
+    const usuarios = await carregarUsuariosAtivosPorIds(userIds);
+    if (!usuarios.length) {
+      return res.status(400).json({ ok: false, erro: 'Nenhum usuário ativo encontrado.' });
+    }
+
+    const nomes = usuarios.map((u) => u.nome).join('; ');
+    const emailsCell = usuarios.map((u) => u.email).join('; ');
+
+    await sheetsService.atualizar(demandaId, { responsavel: nomes, email: emailsCell });
+    const demandaAtualizada = await sheetsService.buscarPorId(demandaId);
+
+    let notificacao = { sent: false, reason: 'Email não informado.' };
+    if (emailsCell) {
+      try {
+        notificacao = await notificationService.enviarNovaDemanda(demandaAtualizada);
+        if (notificacao.sent) {
+          const assignmentHash = notificationRegistry.buildAssignmentHash(demandaAtualizada);
+          await notificationRegistry.markAssignmentSent(demandaId, assignmentHash);
+        }
+      } catch (error) {
+        notificacao = { sent: false, reason: `Falha no envio: ${error.message}` };
+      }
+    }
+
+    let notificacaoAdmins = { total: 0, enviados: 0, falhas: [] };
+    if (notificationService.isEnabled()) {
+      try {
+        const adminEmails = await listarEmailsAdminsAtivos();
+        const destinatariosDemanda = demandEmails(emailsCell);
+        const destinatarios = adminEmails.filter((email) => email && !destinatariosDemanda.includes(email));
+        notificacaoAdmins.total = destinatarios.length;
+
+        const results = await Promise.allSettled(
+          destinatarios.map((email) => notificationService.enviarNovaDemandaAdmin(demandaAtualizada, email))
+        );
+
+        results.forEach((r, idx) => {
+          if (r.status === 'fulfilled' && r.value?.sent) notificacaoAdmins.enviados += 1;
+          else notificacaoAdmins.falhas.push(destinatarios[idx]);
+        });
+      } catch (error) {
+        notificacaoAdmins.falhas.push(`Erro geral: ${error.message}`);
+      }
+    }
+
+    return res.json({ ok: true, demanda: demandaAtualizada, notificacao, notificacaoAdmins });
   } catch (error) {
     return res.status(500).json({ ok: false, erro: error.message });
   }

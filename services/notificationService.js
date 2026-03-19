@@ -39,6 +39,19 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
 }
 
+function splitEmailRecipients(to) {
+  if (Array.isArray(to)) {
+    return to.map((v) => String(v || '').trim()).filter(Boolean);
+  }
+  if (to === undefined || to === null) return [];
+
+  // Suporta formatos comuns: "a@x.com,b@y.com" | "a@x.com; b@y.com" | "a@x.com | b@y.com"
+  return String(to)
+    .split(/[;,|\n]/g)
+    .map((v) => String(v || '').trim())
+    .filter(Boolean);
+}
+
 function isEnabled() {
   return !!(
     nodemailer
@@ -171,13 +184,14 @@ async function testarConexaoSMTP() {
 async function sendEmail({ to, subject, text, html, attachments = [] }) {
   if (!isEnabled()) return { sent: false, reason: getDisabledReason() };
 
-  const target = normalize(to);
-  if (!isValidEmail(target)) return { sent: false, reason: 'Email de destino inválido.' };
+  const recipients = splitEmailRecipients(to);
+  const validRecipients = recipients.filter((email) => isValidEmail(email));
+  if (validRecipients.length === 0) return { sent: false, reason: 'Email de destino inválido.' };
 
   const transporter = getTransporter();
   const info = await transporter.sendMail({
     from: normalizeEmailFrom(process.env.EMAIL_FROM),
-    to: target,
+    to: validRecipients.join(','),
     subject,
     text,
     html,

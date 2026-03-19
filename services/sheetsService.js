@@ -52,6 +52,7 @@ const sheets = google.sheets({ version: 'v4', auth });
 
 const spreadsheetId = String(process.env.SPREADSHEET_ID || '').trim();
 const SHEET_NAME = String(process.env.SHEET_NAME || 'DEMANDAS').trim();
+const ORG_SHEET_NAME = String(process.env.ORG_SHEET_NAME || 'ORGANOGRAMA').trim();
 
 if (!spreadsheetId) {
   throw new Error('SPREADSHEET_ID não configurado no .env');
@@ -89,7 +90,7 @@ function mapRowToDemanda(row) {
   };
 }
 
-async function getSheetTitleOrThrow() {
+async function getSheetTitleByName(name) {
   const meta = await sheets.spreadsheets.get({
     spreadsheetId,
     fields: 'sheets.properties.title',
@@ -99,12 +100,16 @@ async function getSheetTitleOrThrow() {
     .map((s) => s.properties?.title)
     .filter(Boolean);
 
-  const found = titles.find((t) => normalize(t) === normalize(SHEET_NAME));
-  if (!found) {
-    throw new Error(`Aba "${SHEET_NAME}" não encontrada. Abas disponíveis: ${titles.join(', ')}`);
+  const target = titles.find((t) => normalize(t) === normalize(name));
+  if (!target) {
+    throw new Error(`Aba "${name}" não encontrada. Abas disponíveis: ${titles.join(', ')}`);
   }
 
-  return found;
+  return target;
+}
+
+async function getSheetTitleOrThrow(name = SHEET_NAME) {
+  return getSheetTitleByName(name);
 }
 
 async function listar() {
@@ -231,6 +236,19 @@ async function atualizar(demandaId, dados) {
   return { demandaId, rowNumber: found.rowNumber };
 }
 
+async function listarAba(sheetName, range = 'A1:Z1000') {
+  const sheetTitle = await getSheetTitleOrThrow(sheetName);
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${quoteSheetName(sheetTitle)}!${range}`,
+  });
+  return response.data.values || [];
+}
+
+async function listarOrganograma(range = 'A1:Z1000') {
+  return listarAba(ORG_SHEET_NAME, range);
+}
+
 async function remover(demandaId) {
   const found = await findRowByDemandaId(demandaId);
   if (!found) {
@@ -279,4 +297,6 @@ module.exports = {
   buscarPorId,
   atualizar,
   remover,
+  listarAba,
+  listarOrganograma,
 };

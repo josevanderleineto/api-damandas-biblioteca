@@ -47,6 +47,7 @@ function sanitizeUser(user) {
     id: user.id,
     nome: user.nome,
     email: user.email,
+    matricula: user.matricula,
     role: user.role,
     ativo: user.ativo,
     createdAt: user.created_at,
@@ -55,7 +56,7 @@ function sanitizeUser(user) {
 
 async function findUserByEmail(email) {
   const result = await db.query(
-    `SELECT id, nome, email, senha_hash, role, ativo, created_at
+    `SELECT id, nome, email, matricula, senha_hash, role, ativo, created_at
        FROM users
       WHERE email = $1`,
     [normalizeEmail(email)]
@@ -68,6 +69,7 @@ function generateToken(user) {
     {
       nome: user.nome,
       email: user.email,
+      matricula: user.matricula || '',
       role: user.role,
     },
     getJwtSecret(),
@@ -92,6 +94,7 @@ exports.login = async (req, res) => {
         id: 'root',
         nome: 'Root Sistema',
         email: getRootLogin(),
+        matricula: '',
         role: 'root',
       };
       const token = generateToken(rootUser);
@@ -127,7 +130,7 @@ exports.me = async (req, res) => {
 exports.listarUsuarios = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, nome, email, role, ativo, created_at
+      `SELECT id, nome, email, matricula, role, ativo, created_at
          FROM users
         ORDER BY created_at DESC`
     );
@@ -142,11 +145,13 @@ exports.criarUsuario = async (req, res) => {
   try {
     const nome = normalize(req.body?.nome);
     const email = normalizeEmail(req.body?.email);
+    const matriculaRaw = req.body?.matricula;
+    const matricula = typeof matriculaRaw === 'string' ? matriculaRaw : String(matriculaRaw || '');
     const senha = String(req.body?.senha || '');
     const role = normalize(req.body?.role || 'colaborador').toLowerCase();
 
-    if (!nome || !email || !senha) {
-      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: nome, email, senha.' });
+    if (!nome || !email || !senha || !matricula || !matricula.trim()) {
+      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: nome, email, matricula, senha.' });
     }
 
     if (!isValidEmail(email)) {
@@ -169,10 +174,10 @@ exports.criarUsuario = async (req, res) => {
     const senhaHash = await bcrypt.hash(senha, 10);
 
     const result = await db.query(
-      `INSERT INTO users (nome, email, senha_hash, role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, nome, email, role, ativo, created_at`,
-      [nome, email, senhaHash, role]
+      `INSERT INTO users (nome, email, matricula, senha_hash, role)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, nome, email, matricula, role, ativo, created_at`,
+      [nome, email, matricula, senhaHash, role]
     );
 
     return res.status(201).json({ ok: true, user: sanitizeUser(result.rows[0]) });
@@ -205,6 +210,85 @@ exports.alterarStatusUsuario = async (req, res) => {
 
     return res.json({ ok: true, user: sanitizeUser(result.rows[0]) });
   } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
+  }
+};
+
+exports.atualizarUsuario = async (req, res) => {
+  try {
+    const userId = normalize(req.params?.id);
+    const nome = normalize(req.body?.nome);
+    const email = normalizeEmail(req.body?.email);
+    const matriculaRaw = req.body?.matricula;
+    const matricula = typeof matriculaRaw === 'string' ? matriculaRaw : String(matriculaRaw || '');
+    const role = normalize(req.body?.role || 'colaborador').toLowerCase();
+    const senha = String(req.body?.senha || '').trim();
+
+    if (!userId) {
+      return res.status(400).json({ ok: false, erro: 'ID de usuário obrigatório.' });
+    }
+
+    if (!nome || !email || !matricula || !matricula.trim()) {
+      return res.status(400).json({ ok: false, erro: 'Campos obrigatórios: nome, email, matricula.' });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ ok: false, erro: 'Email inválido.' });
+    }
+
+    if (!['admin', 'colaborador'].includes(role)) {
+      return res.status(400).json({ ok: false, erro: 'Role inválida. Use admin ou colaborador.' });
+    }
+
+    if (senha && senha.length < 6) {
+      return res.status(400).json({ ok: false, erro: 'Senha deve ter ao menos 6 caracteres.' });
+    }
+
+    const existingEmail = await findUserByEmail(email);
+    if (existingEmail && existingEmail.id !== userId) {
+      return res.status(409).json({ ok: false, erro: 'Já existe usuário com este email.' });
+    }
+
+    const senhaHash = senha ? await bcrypt.hash(senha, 10) : null;
+
+    const result = await db.query(
+      `UPDATE users
+          SET nome = $1,
+              email = $2,
+              matricula = $3,
+              role = $4,
+              ${senhaHash ? 'senha_hash = $5,' : ''}
+              updated_at = NOW()
+        WHERE id = $6
+      RETURNING id, nome, email, matricula, role, ativo, created_at`,
+      senhaHash ? [nome, email, matricula, role, senhaHash, userId] : [nome, email, matricula, role, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, erro: 'Usuário não encontrado.' });
+    }
+
+    return res.json({ ok: true, user: sanitizeUser(result.rows[0]) });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
+  }
+};
+
+exports.removerUsuario = async (req, res) => {
+  try {
+    const userId = normalize(req.params?.id);
+    if (!userId) return res.status(400).json({ ok: false, erro: 'ID obrigatório.' });
+
+    const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, erro: 'Usuário não encontrado.' });
+    }
+
+    return res.json({ ok: true, removido: userId });
+  } catch (error) {
+    if (error.message && error.message.includes('prazo_requests')) {
+      return res.status(409).json({ ok: false, erro: 'Usuário possui solicitações vinculadas. Desative-o em vez de excluir.' });
+    }
     return res.status(500).json({ ok: false, erro: error.message });
   }
 };

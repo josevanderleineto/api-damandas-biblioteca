@@ -26,6 +26,7 @@ function authenticateToken(req, res, next) {
       id: payload.sub,
       nome: payload.nome,
       email: payload.email,
+      matricula: payload.matricula,
       role: payload.role,
     };
 

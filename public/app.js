@@ -18,13 +18,18 @@ const DEFAULT_DASHBOARD_FILTERS = Object.freeze({
 const state = {
   token: localStorage.getItem('token') || '',
   user: null,
-  activeView: 'demandas',
+  activeView: 'dados',
   demandas: [],
   demandasUpdatedAt: null,
   charts: {},
+  users: [],
+  assigningDemand: null,
+  createResponsaveisIds: [],
+  assignResponsaveisIds: [],
   dashboardFilters: { ...DEFAULT_DASHBOARD_FILTERS },
   teamMetric: localStorage.getItem('teamMetric') || 'total',
   teamTop: safeInt(localStorage.getItem('teamTop'), 10),
+  organogramaRoots: [],
 };
 
 const els = {
@@ -32,6 +37,7 @@ const els = {
   adminView: document.getElementById('adminView'),
   collabView: document.getElementById('collabView'),
   dashboardView: document.getElementById('dashboardView'),
+  organogramaView: document.getElementById('organogramaView'),
   mainNav: document.getElementById('mainNav'),
   tabButtons: Array.from(document.querySelectorAll('[data-view]')),
   userBadge: document.getElementById('userBadge'),
@@ -40,8 +46,7 @@ const els = {
   statTotal: document.getElementById('statTotal'),
   statDone: document.getElementById('statDone'),
   statLate: document.getElementById('statLate'),
-  statSoon: document.getElementById('statSoon'),
-  statStatusLabel: document.getElementById('statStatusLabel'),
+  statPending: document.getElementById('statPending'),
   dashboardTable: document.getElementById('dashboardTable'),
   dashboardUpdatedAt: document.getElementById('dashboardUpdatedAt'),
   teamTable: document.getElementById('teamTable'),
@@ -59,6 +64,21 @@ const els = {
   dashboardFilterSummary: document.getElementById('dashboardFilterSummary'),
   dashboardClearFiltersBtn: document.getElementById('dashboardClearFiltersBtn'),
   dashboardReloadBtn: document.getElementById('dashboardReloadBtn'),
+  createResponsavelPicker: document.getElementById('createResponsavelPicker'),
+  createResponsaveisChips: document.getElementById('createResponsaveisChips'),
+  addCreateResponsavelBtn: document.getElementById('addCreateResponsavelBtn'),
+  createDemandMatricula: document.getElementById('createDemandMatricula'),
+  createDemandEmail: document.querySelector('#createDemandForm textarea[name=\"email\"]'),
+  assignModal: document.getElementById('assignModal'),
+  assignForm: document.getElementById('assignForm'),
+  assignResponsavelPicker: document.getElementById('assignResponsavelPicker'),
+  assignResponsaveisChips: document.getElementById('assignResponsaveisChips'),
+  addAssignResponsavelBtn: document.getElementById('addAssignResponsavelBtn'),
+  assignDemandId: document.getElementById('assignDemandId'),
+  closeAssignModal: document.getElementById('closeAssignModal'),
+  cancelAssignBtn: document.getElementById('cancelAssignBtn'),
+  organogramaContainer: document.getElementById('organogramaContainer'),
+  refreshOrganogramaBtn: document.getElementById('refreshOrganogramaBtn'),
 };
 
 function showAlert(type, message) {
@@ -109,8 +129,26 @@ function normalizeStatus(status) {
   return String(status || '').trim().toLowerCase();
 }
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 function normalizeText(value) {
   return String(value || '').normalize('NFKC').trim().toLowerCase();
+}
+
+function splitTextList(value) {
+  return String(value || '')
+    .split(/[;,|\n\r]/g)
+    .map((v) => String(v || '').trim())
+    .filter(Boolean);
+}
+
+function splitEmailList(value) {
+  return String(value || '')
+    .split(/[;,|\n\r]/g)
+    .map((v) => String(v || '').trim())
+    .filter(Boolean);
 }
 
 function escapeJsString(value) {
@@ -193,7 +231,7 @@ function setDemandasCache(list = []) {
 function setSession(token, user) {
   state.token = token || '';
   state.user = user || null;
-  state.activeView = 'demandas';
+  state.activeView = 'dados';
   if (token) localStorage.setItem('token', token);
   else localStorage.removeItem('token');
   renderLayout();
@@ -210,6 +248,7 @@ function renderLayout() {
   els.adminView.classList.add('hidden');
   els.collabView.classList.add('hidden');
   els.dashboardView.classList.add('hidden');
+  if (els.organogramaView) els.organogramaView.classList.add('hidden');
 
   els.userBadge.classList.toggle('hidden', !isLogged);
   els.logoutBtn.classList.toggle('hidden', !isLogged);
@@ -228,16 +267,24 @@ function renderLayout() {
     return;
   }
 
+  if (state.activeView === 'organograma') {
+    if (els.organogramaView) els.organogramaView.classList.remove('hidden');
+    return;
+  }
+
   if (isAdminRole(user)) els.adminView.classList.remove('hidden');
   else els.collabView.classList.remove('hidden');
 }
 
 function setActiveView(view) {
-  const next = view === 'dados' ? 'dados' : 'demandas';
+  const allowed = ['dados', 'organograma', 'demandas'];
+  const next = allowed.includes(view) ? view : 'demandas';
   state.activeView = next;
   renderLayout();
   if (next === 'dados') {
     refreshDashboard();
+  } else if (next === 'organograma') {
+    refreshOrganograma(true);
   }
 }
 
@@ -270,37 +317,111 @@ async function refreshDemandsAdmin() {
   if (state.activeView === 'dados') renderDashboard(state.demandas);
   const rows = (res.dados || []).map((d) => [
     d.demanda,
-    d.responsavel,
+    `<button class="link-btn" onclick="openAssignModal('${escapeJsString(d.demanda)}','${escapeJsString(d.email)}')">${d.responsavel || 'Atribuir'}</button>`,
     d.email,
+    d.matricula,
     d.descricao,
     d.prazo,
-    d.status,
+    statusBadge(d.status),
     d.prioridade,
     `<button class="btn danger" onclick="deleteDemand('${String(d.demanda || '').replace(/'/g, "\\'")}')">Remover</button>`,
   ]);
-  table.innerHTML = tableHTML(['ID', 'Responsável', 'Email', 'Descrição', 'Prazo', 'Status', 'Prioridade', 'Ação'], rows);
+  table.innerHTML = tableHTML(['ID', 'Responsáveis', 'Email', 'Matrícula', 'Descrição', 'Prazo', 'Status', 'Prioridade', 'Ação'], rows);
 }
+
+function prettyStatus(status) {
+  const value = String(status || '').trim();
+  if (!value) return 'Sem status';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function statusBadge(status) {
+  const bucket = statusBucket(status);
+  const cls =
+    bucket === 'pendente' ? 'status-pendente' : bucket === 'andamento' ? 'status-andamento' : bucket === 'concluida' ? 'status-concluida' : 'status-outros';
+  return `<span class=\"status-badge ${cls}\">${prettyStatus(status)}</span>`;
+}
+
+function canCurrentUserUpdateDemand(demanda) {
+  if (!demanda || !state.user) return false;
+  const emails = splitEmailList(demanda.email).map((e) => normalizeEmail(e));
+  const userEmail = normalizeEmail(state.user.email);
+  return emails.includes(userEmail);
+}
+
+function statusActionButtons(demanda) {
+  const norm = normalizeStatus(demanda.status);
+  const canUpdate = canCurrentUserUpdateDemand(demanda);
+  if (!canUpdate) return '<span class=\"muted\">Somente responsáveis</span>';
+
+  const actions = [];
+  if (!norm || norm === 'pendente') {
+    actions.push(`<button class=\"btn accent\" onclick=\"quickStatus('${demanda.demanda}','Em andamento')\">Iniciar</button>`);
+  }
+  if (norm === 'em andamento' || norm === 'andamento') {
+    actions.push(`<button class=\"btn primary\" onclick=\"quickStatus('${demanda.demanda}','Concluído')\">Concluir</button>`);
+  }
+  if (!actions.length) return '<span class=\"muted\">--</span>';
+  return `<div style=\"display:flex;gap:6px;flex-wrap:wrap\">${actions.join('')}</div>`;
+}
+
+window.quickStatus = async (demandaId, status) => {
+  const id = String(demandaId || '').trim();
+  if (!id) return;
+  try {
+    await api(`/demandas/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+    showAlert('ok', `Status alterado para ${status}.`);
+    await refreshDemandsCollab();
+    if (isAdminRole(state.user)) {
+      await refreshDemandsAdmin();
+    }
+    if (state.activeView === 'dados') {
+      refreshDashboard(true);
+    }
+  } catch (error) {
+    if (error?.erro?.includes('Acesso negado')) {
+      showAlert('err', 'Apenas responsáveis podem alterar o status.');
+    } else {
+      showAlert('err', normalizeErr(error));
+    }
+  }
+};
 
 async function refreshDemandsCollab() {
   const table = document.getElementById('demandsCollabTable');
   const res = await api('/demandas');
   setDemandasCache(res.dados || []);
   if (state.activeView === 'dados') renderDashboard(state.demandas);
-  const rows = (res.dados || []).map((d) => [d.demanda, d.descricao, d.prazo, d.status, d.prioridade, d.alerta]);
-  table.innerHTML = tableHTML(['ID', 'Descrição', 'Prazo', 'Status', 'Prioridade', 'Alerta'], rows);
+  const rows = (res.dados || []).map((d) => [
+    d.demanda,
+    d.responsavel,
+    d.descricao,
+    d.prazo,
+    statusBadge(d.status),
+    d.prioridade,
+    d.alerta,
+    statusActionButtons(d),
+  ]);
+  table.innerHTML = tableHTML(['ID', 'Responsáveis', 'Descrição', 'Prazo', 'Status', 'Prioridade', 'Alerta', 'Ações'], rows);
 }
 
 async function refreshUsers() {
   const table = document.getElementById('usersTable');
   const res = await api('/auth/users');
+  state.users = res.dados || [];
+  populateResponsavelSelects();
+  // Atualiza emails caso haja mudanças na lista de usuários
+  syncCreateEmailsFromState();
+  syncCreateMatriculaFromState();
   const rows = (res.dados || []).map((u) => [
     u.nome,
     u.email,
+    u.matricula || '-',
     u.role,
     u.ativo ? 'Ativo' : 'Inativo',
-    `<button class="btn ghost" onclick="toggleUser('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`,
+    `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ghost" onclick="editUser('${u.id}')">Editar</button><button class="btn danger" onclick="deleteUser('${u.id}')">Excluir</button><button class="btn ghost" onclick="toggleUser('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button></div>`,
   ]);
-  table.innerHTML = tableHTML(['Nome', 'Email', 'Perfil', 'Status', 'Ação'], rows);
+  table.innerHTML = tableHTML(['Nome', 'Email', 'Matrícula', 'Perfil', 'Status', 'Ações'], rows);
 }
 
 async function refreshRequests() {
@@ -316,6 +437,37 @@ async function refreshRequests() {
     `<div style="display:flex;gap:6px"><button class="btn accent" onclick="decideRequest(${r.id}, 'approved')">Aprovar</button><button class="btn danger" onclick="decideRequest(${r.id}, 'rejected')">Reprovar</button></div>`,
   ]);
   table.innerHTML = tableHTML(['Req', 'Demanda', 'Solicitante', 'Prazo Atual', 'Novo Prazo', 'Motivo', 'Ação'], rows);
+}
+
+function renderOrgNode(node) {
+  const children = (node.filhos || []).map((child) => renderOrgNode(child)).join('');
+  return `<li><div class=\"org-card\"><strong>${node.nome || 'Sem nome'}</strong>${node.cargo ? `<span>${node.cargo}</span>` : ''}</div>${children ? `<ul>${children}</ul>` : ''}</li>`;
+}
+
+function renderOrganograma() {
+  if (!els.organogramaContainer) return;
+  if (!state.organogramaRoots.length) {
+    els.organogramaContainer.innerHTML = '<p class=\"muted\">Nenhuma estrutura encontrada.</p>';
+    return;
+  }
+  const html = `<ul class=\"org-tree\">${state.organogramaRoots.map((n) => renderOrgNode(n)).join('')}</ul>`;
+  els.organogramaContainer.innerHTML = html;
+}
+
+async function refreshOrganograma(force = false) {
+  if (!els.organogramaContainer) return;
+  if (!force && state.organogramaRoots.length) {
+    renderOrganograma();
+    return;
+  }
+  els.organogramaContainer.innerHTML = '<p class=\"muted\">Carregando organograma...</p>';
+  try {
+    const res = await api('/organograma');
+    state.organogramaRoots = res.dados?.roots || [];
+    renderOrganograma();
+  } catch (error) {
+    els.organogramaContainer.innerHTML = `<p class=\"alert err\">${normalizeErr(error)}</p>`;
+  }
 }
 
 function renderChart(id, config) {
@@ -367,6 +519,123 @@ function setSelectOptions(selectEl, items, { allLabel = 'Todos' } = {}) {
   selectEl.value = values.has(current) ? current : '';
 }
 
+function pruneResponsavelList(key) {
+  const validIds = new Set((state.users || []).map((u) => u.id));
+  const before = state[key] || [];
+  state[key] = before.filter((id) => validIds.has(id));
+}
+
+function renderResponsavelChips(key, containerEl) {
+  if (!containerEl) return;
+  containerEl.replaceChildren();
+  const users = (state[key] || []).map((id) => state.users.find((u) => u.id === id)).filter(Boolean);
+  if (!users.length) {
+    const span = document.createElement('span');
+    span.className = 'chip-empty';
+    span.textContent = 'Nenhum responsável adicionado.';
+    containerEl.appendChild(span);
+    return;
+  }
+  users.forEach((u) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = `<span>${u.nome}</span>`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '×';
+    btn.setAttribute('aria-label', `Remover ${u.nome}`);
+    btn.addEventListener('click', () => removeResponsavel(key, u.id));
+    chip.appendChild(btn);
+    containerEl.appendChild(chip);
+  });
+}
+
+function populateResponsavelSelects() {
+  const ativos = (state.users || []).filter((u) => u.ativo !== false);
+  const opts = ativos.map((u) => ({ value: u.id, label: `${u.nome} (${u.email})` }));
+
+  const fill = (selectEl) => {
+    if (!selectEl) return;
+    const current = selectEl.value;
+    selectEl.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Selecione';
+    selectEl.appendChild(placeholder);
+    opts.forEach((o) => {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.label;
+      selectEl.appendChild(opt);
+    });
+    const values = new Set(opts.map((o) => o.value));
+    selectEl.value = values.has(current) ? current : '';
+  };
+
+  fill(els.createResponsavelPicker);
+  fill(els.assignResponsavelPicker);
+
+  pruneResponsavelList('createResponsaveisIds');
+  pruneResponsavelList('assignResponsaveisIds');
+  renderResponsavelChips('createResponsaveisIds', els.createResponsaveisChips);
+  renderResponsavelChips('assignResponsaveisIds', els.assignResponsaveisChips);
+  syncCreateEmailsFromState();
+  syncCreateMatriculaFromState();
+}
+
+function syncCreateEmailsFromState() {
+  const chosen = (state.createResponsaveisIds || [])
+    .map((id) => state.users.find((u) => u.id === id))
+    .filter(Boolean);
+  const emails = chosen.map((u) => u.email).join('; ');
+  if (els.createDemandEmail) els.createDemandEmail.value = emails;
+}
+
+function syncCreateMatriculaFromState() {
+  const field = els.createDemandMatricula;
+  if (!field) return;
+  const selected = (state.createResponsaveisIds || [])
+    .map((id) => state.users.find((u) => u.id === id))
+    .filter(Boolean);
+  if (!selected.length) {
+    field.value = '';
+    return;
+  }
+  if (field.value && String(field.value).trim() !== '') return; // não sobrescreve entrada manual
+  const firstWithMatricula = selected.find((u) => u.matricula);
+  if (firstWithMatricula?.matricula) {
+    field.value = firstWithMatricula.matricula;
+  }
+}
+
+function addResponsavel(key, pickerEl, chipsEl) {
+  const id = pickerEl?.value;
+  if (!id) {
+    showAlert('err', 'Escolha um usuário.');
+    return;
+  }
+  if ((state[key] || []).includes(id)) {
+    showAlert('err', 'Responsável já adicionado.');
+    return;
+  }
+  state[key] = [...(state[key] || []), id];
+  pickerEl.value = '';
+  renderResponsavelChips(key, chipsEl);
+  if (key === 'createResponsaveisIds') {
+    syncCreateEmailsFromState();
+    syncCreateMatriculaFromState();
+  }
+}
+
+function removeResponsavel(key, id) {
+  state[key] = (state[key] || []).filter((rid) => rid !== id);
+  renderResponsavelChips(key, key === 'createResponsaveisIds' ? els.createResponsaveisChips : els.assignResponsaveisChips);
+  if (key === 'createResponsaveisIds') {
+    syncCreateEmailsFromState();
+    syncCreateMatriculaFromState();
+  }
+}
+
 function populateDashboardFilterOptions(allDemandas) {
   const demandas = Array.isArray(allDemandas) ? allDemandas : [];
 
@@ -375,9 +644,12 @@ function populateDashboardFilterOptions(allDemandas) {
     let hasNone = false;
 
     demandas.forEach((d) => {
-      const r = String(d.responsavel || '').trim();
-      if (r) set.add(r);
-      else hasNone = true;
+      const tokens = splitTextList(d.responsavel);
+      if (!tokens.length) {
+        hasNone = true;
+        return;
+      }
+      tokens.forEach((t) => set.add(t));
     });
 
     const items = Array.from(set)
@@ -481,9 +753,11 @@ function applyDashboardFilters(demandas, filters) {
   return (Array.isArray(demandas) ? demandas : []).filter((d) => {
     if (f.responsavel) {
       if (f.responsavel === '__none__') {
-        if (String(d.responsavel || '').trim()) return false;
-      } else if (normalizeText(d.responsavel) !== respNorm) {
-        return false;
+        const tokens = splitTextList(d.responsavel);
+        if (tokens.length) return false;
+      } else {
+        const tokensNorm = splitTextList(d.responsavel).map((t) => normalizeText(t));
+        if (!tokensNorm.includes(respNorm)) return false;
       }
     }
 
@@ -597,55 +871,58 @@ function computeTeamStats(demandas) {
   const list = Array.isArray(demandas) ? demandas : [];
 
   for (const d of list) {
-    const raw = String(d.responsavel || '').trim();
-    const key = raw || 'Sem responsável';
-
-    if (!map.has(key)) {
-      map.set(key, {
-        responsavel: key,
-        total: 0,
-        open: 0,
-        done: 0,
-        overdueOpen: 0,
-        doneWithDeadline: 0,
-        doneOnTime: 0,
-        cycleCount: 0,
-        cycleDaysSum: 0,
-        onTimeRate: null,
-        avgCycleDays: null,
-      });
-    }
-
-    const row = map.get(key);
-    row.total += 1;
-
     const done = isDoneStatus(d.status);
-    if (done) row.done += 1;
-    else row.open += 1;
+    const tokens = splitTextList(d.responsavel);
+    const keysToCount = tokens.length ? tokens : ['Sem responsável'];
 
     const diffPrazo = daysUntil(d.prazo);
-    if (!done && diffPrazo !== null && diffPrazo < 0) {
-      row.overdueOpen += 1;
-    }
+    const isOverdueOpen = !done && diffPrazo !== null && diffPrazo < 0;
 
     const prazo = parseDateBr(d.prazo);
     const conclusao = parseDateBr(d.conclusao);
+    const hasDeadline = done && prazo && conclusao;
+    const doneWithinDeadline = !!(hasDeadline && conclusao.getTime() <= prazo.getTime());
 
-    if (done && prazo && conclusao) {
-      row.doneWithDeadline += 1;
-      if (conclusao.getTime() <= prazo.getTime()) {
-        row.doneOnTime += 1;
-      }
+    const created = parseDateBr(d.dataCriacao);
+    let cycleDiffDays = null;
+    if (done && created && conclusao) {
+      const diffDays = Math.round((conclusao.getTime() - created.getTime()) / 86400000);
+      cycleDiffDays = Number.isFinite(diffDays) && diffDays >= 0 ? diffDays : null;
     }
 
-    if (done) {
-      const created = parseDateBr(d.dataCriacao);
-      if (created && conclusao) {
-        const diffDays = Math.round((conclusao.getTime() - created.getTime()) / 86400000);
-        if (Number.isFinite(diffDays) && diffDays >= 0) {
-          row.cycleCount += 1;
-          row.cycleDaysSum += diffDays;
-        }
+    for (const key of keysToCount) {
+      if (!map.has(key)) {
+        map.set(key, {
+          responsavel: key,
+          total: 0,
+          open: 0,
+          done: 0,
+          overdueOpen: 0,
+          doneWithDeadline: 0,
+          doneOnTime: 0,
+          cycleCount: 0,
+          cycleDaysSum: 0,
+          onTimeRate: null,
+          avgCycleDays: null,
+        });
+      }
+
+      const row = map.get(key);
+      row.total += 1;
+
+      if (done) row.done += 1;
+      else row.open += 1;
+
+      if (isOverdueOpen) row.overdueOpen += 1;
+
+      if (hasDeadline) {
+        row.doneWithDeadline += 1;
+        if (doneWithinDeadline) row.doneOnTime += 1;
+      }
+
+      if (cycleDiffDays !== null) {
+        row.cycleCount += 1;
+        row.cycleDaysSum += cycleDiffDays;
       }
     }
   }
@@ -759,19 +1036,12 @@ function updateStatCards(demandas) {
   const total = demandas.length;
   const done = demandas.filter((d) => isDoneStatus(d.status)).length;
   const late = demandas.filter((d) => isLateDemand(d)).length;
-  const soon = demandas.filter((d) => {
-    if (isDoneStatus(d.status)) return false;
-    const diff = daysUntil(d.prazo);
-    return diff !== null && diff >= 0 && diff <= 14;
-  }).length;
+  const pending = total - done;
 
   if (els.statTotal) els.statTotal.textContent = total;
   if (els.statDone) els.statDone.textContent = done;
   if (els.statLate) els.statLate.textContent = late;
-  if (els.statSoon) els.statSoon.textContent = soon;
-  if (els.statStatusLabel) {
-    els.statStatusLabel.textContent = filtersActive(state.dashboardFilters) ? `${total} itens (filtrado)` : `${total} itens`;
-  }
+  if (els.statPending) els.statPending.textContent = pending;
 }
 
 function renderDashboardTable(demandas) {
@@ -989,12 +1259,54 @@ async function afterLoginRefresh() {
   if (state.activeView === 'dados') {
     await refreshDashboard();
   }
+  if (state.activeView === 'organograma') {
+    await refreshOrganograma(true);
+  }
 }
 
 window.toggleUser = async (id, ativo) => {
   try {
     await api(`/auth/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ ativo }) });
     showAlert('ok', 'Status do usuário atualizado.');
+    await refreshUsers();
+  } catch (error) {
+    showAlert('err', normalizeErr(error));
+  }
+};
+
+window.editUser = async (id) => {
+  const user = (state.users || []).find((u) => u.id === id);
+  if (!user) return;
+
+  const nome = prompt('Nome', user.nome);
+  if (!nome) return;
+  const email = prompt('Email', user.email);
+  if (!email) return;
+  const matricula = prompt('Matrícula', user.matricula || '');
+  if (!matricula) return;
+  const role = prompt('Perfil (admin ou colaborador)', user.role);
+  if (!role) return;
+
+  try {
+    await api(`/auth/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ nome, email, matricula, role }),
+    });
+    showAlert('ok', 'Usuário atualizado.');
+    await refreshUsers();
+  } catch (error) {
+    showAlert('err', normalizeErr(error));
+  }
+};
+
+window.deleteUser = async (id) => {
+  const user = (state.users || []).find((u) => u.id === id);
+  if (!user) return;
+  const confirm = window.confirm(`Excluir o usuário ${user.nome}? Esta ação é permanente.`);
+  if (!confirm) return;
+  try {
+    await api(`/auth/users/${id}`, { method: 'DELETE' });
+    showAlert('ok', 'Usuário removido.');
     await refreshUsers();
   } catch (error) {
     showAlert('err', normalizeErr(error));
@@ -1033,6 +1345,55 @@ window.deleteDemand = async (demandaId) => {
     showAlert('err', normalizeErr(error));
   }
 };
+
+window.openAssignModal = (demandaId, email) => {
+  if (!els.assignModal) return;
+  state.assigningDemand = { id: demandaId, email };
+  if (els.assignDemandId) els.assignDemandId.textContent = demandaId;
+  populateResponsavelSelects();
+
+  const selectedEmails = splitEmailList(email || '').map((e) => e.toLowerCase());
+  state.assignResponsaveisIds = (state.users || [])
+    .filter((u) => selectedEmails.includes(String(u.email || '').toLowerCase()))
+    .map((u) => u.id);
+  renderResponsavelChips('assignResponsaveisIds', els.assignResponsaveisChips);
+  if (els.assignResponsavelPicker) els.assignResponsavelPicker.value = '';
+
+  els.assignModal.classList.remove('hidden');
+};
+
+function closeAssignModal() {
+  if (els.assignModal) els.assignModal.classList.add('hidden');
+  state.assigningDemand = null;
+  state.assignResponsaveisIds = [];
+  renderResponsavelChips('assignResponsaveisIds', els.assignResponsaveisChips);
+}
+
+if (els.closeAssignModal) els.closeAssignModal.addEventListener('click', closeAssignModal);
+if (els.cancelAssignBtn) els.cancelAssignBtn.addEventListener('click', closeAssignModal);
+
+if (els.assignForm) {
+  els.assignForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.assigningDemand) return;
+    const selectedIds = state.assignResponsaveisIds || [];
+    if (!selectedIds.length) {
+      showAlert('err', 'Selecione ao menos um responsável.');
+      return;
+    }
+    try {
+      await api(`/demandas/${state.assigningDemand.id}/assign`, {
+        method: 'PUT',
+        body: JSON.stringify({ userIds: selectedIds }),
+      });
+      showAlert('ok', 'Responsáveis atualizados e notificados.');
+      closeAssignModal();
+      await Promise.all([refreshDemandsAdmin(), refreshDashboard(true)]);
+    } catch (error) {
+      showAlert('err', normalizeErr(error));
+    }
+  });
+}
 
 window.filterByResponsavel = (responsavel) => {
   const value = String(responsavel || '').trim();
@@ -1110,6 +1471,18 @@ els.tabButtons.forEach((btn) => {
   btn.addEventListener('click', () => setActiveView(btn.dataset.view));
 });
 
+if (els.addCreateResponsavelBtn) {
+  els.addCreateResponsavelBtn.addEventListener('click', () =>
+    addResponsavel('createResponsaveisIds', els.createResponsavelPicker, els.createResponsaveisChips)
+  );
+}
+
+if (els.addAssignResponsavelBtn) {
+  els.addAssignResponsavelBtn.addEventListener('click', () =>
+    addResponsavel('assignResponsaveisIds', els.assignResponsavelPicker, els.assignResponsaveisChips)
+  );
+}
+
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -1131,19 +1504,37 @@ document.getElementById('createDemandForm').addEventListener('submit', async (e)
   e.preventDefault();
   const fd = new FormData(e.target);
   try {
+    const titulo = fd.get('titulo');
+    const descricaoDetalhe = fd.get('descricao');
+    const selectedIds = state.createResponsaveisIds || [];
+    if (!selectedIds.length) {
+      showAlert('err', 'Selecione ao menos um responsável.');
+      return;
+    }
+    const chosen = state.users.filter((u) => selectedIds.includes(u.id));
+    const responsavel = chosen.map((u) => u.nome).join('; ');
+    const email = chosen.map((u) => u.email).join('; ');
+    if (els.createDemandEmail) els.createDemandEmail.value = email;
+    const matricula = fd.get('matricula');
+    const descricao = descricaoDetalhe ? `${titulo} — ${descricaoDetalhe}` : titulo;
+
     const res = await api('/demandas', {
       method: 'POST',
       body: JSON.stringify({
-        responsavel: fd.get('responsavel'),
-        email: fd.get('email'),
-        descricao: fd.get('descricao'),
-        matricula: fd.get('matricula'),
+        responsavel,
+        email,
+        descricao,
+        matricula,
         prazo: fd.get('prazo'),
         prioridade: fd.get('prioridade'),
       }),
     });
     showAlert('ok', `Demanda #${res.id} criada.`);
     e.target.reset();
+    state.createResponsaveisIds = [];
+    renderResponsavelChips('createResponsaveisIds', els.createResponsaveisChips);
+    syncCreateEmailsFromState();
+    syncCreateMatriculaFromState();
     await refreshDemandsAdmin();
   } catch (error) {
     showAlert('err', normalizeErr(error));
@@ -1154,11 +1545,13 @@ document.getElementById('createUserForm').addEventListener('submit', async (e) =
   e.preventDefault();
   const fd = new FormData(e.target);
   try {
+    const matricula = fd.get('matricula');
     await api('/auth/users', {
       method: 'POST',
       body: JSON.stringify({
         nome: fd.get('nome'),
         email: fd.get('email'),
+        matricula,
         senha: fd.get('senha'),
         role: fd.get('role'),
       }),
@@ -1212,6 +1605,7 @@ document.getElementById('refreshUsersBtn').addEventListener('click', refreshUser
 document.getElementById('refreshRequestsBtn').addEventListener('click', refreshRequests);
 document.getElementById('refreshDemandsAdminBtn').addEventListener('click', refreshDemandsAdmin);
 document.getElementById('refreshDemandsCollabBtn').addEventListener('click', refreshDemandsCollab);
+if (els.refreshOrganogramaBtn) els.refreshOrganogramaBtn.addEventListener('click', () => refreshOrganograma(true));
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   setSession('', null);
