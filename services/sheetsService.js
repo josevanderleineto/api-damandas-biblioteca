@@ -52,7 +52,6 @@ const sheets = google.sheets({ version: 'v4', auth });
 
 const spreadsheetId = String(process.env.SPREADSHEET_ID || '').trim();
 const SHEET_NAME = String(process.env.SHEET_NAME || 'DEMANDAS').trim();
-const ORG_SHEET_NAME = String(process.env.ORG_SHEET_NAME || 'ORGANOGRAMA').trim();
 
 if (!spreadsheetId) {
   throw new Error('SPREADSHEET_ID não configurado no .env');
@@ -245,9 +244,6 @@ async function listarAba(sheetName, range = 'A1:Z1000') {
   return response.data.values || [];
 }
 
-async function listarOrganograma(range = 'A1:Z1000') {
-  return listarAba(ORG_SHEET_NAME, range);
-}
 
 async function remover(demandaId) {
   const found = await findRowByDemandaId(demandaId);
@@ -298,5 +294,4 @@ module.exports = {
   atualizar,
   remover,
   listarAba,
-  listarOrganograma,
 };

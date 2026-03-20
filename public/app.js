@@ -18,7 +18,7 @@ const DEFAULT_DASHBOARD_FILTERS = Object.freeze({
 const state = {
   token: localStorage.getItem('token') || '',
   user: null,
-  activeView: 'dados',
+  activeView: 'demandas',
   demandas: [],
   demandasUpdatedAt: null,
   charts: {},
@@ -29,7 +29,6 @@ const state = {
   dashboardFilters: { ...DEFAULT_DASHBOARD_FILTERS },
   teamMetric: localStorage.getItem('teamMetric') || 'total',
   teamTop: safeInt(localStorage.getItem('teamTop'), 10),
-  organogramaRoots: [],
 };
 
 const els = {
@@ -37,7 +36,6 @@ const els = {
   adminView: document.getElementById('adminView'),
   collabView: document.getElementById('collabView'),
   dashboardView: document.getElementById('dashboardView'),
-  organogramaView: document.getElementById('organogramaView'),
   mainNav: document.getElementById('mainNav'),
   tabButtons: Array.from(document.querySelectorAll('[data-view]')),
   userBadge: document.getElementById('userBadge'),
@@ -77,8 +75,6 @@ const els = {
   assignDemandId: document.getElementById('assignDemandId'),
   closeAssignModal: document.getElementById('closeAssignModal'),
   cancelAssignBtn: document.getElementById('cancelAssignBtn'),
-  organogramaContainer: document.getElementById('organogramaContainer'),
-  refreshOrganogramaBtn: document.getElementById('refreshOrganogramaBtn'),
 };
 
 function showAlert(type, message) {
@@ -231,7 +227,7 @@ function setDemandasCache(list = []) {
 function setSession(token, user) {
   state.token = token || '';
   state.user = user || null;
-  state.activeView = 'dados';
+  state.activeView = 'demandas';
   if (token) localStorage.setItem('token', token);
   else localStorage.removeItem('token');
   renderLayout();
@@ -248,7 +244,6 @@ function renderLayout() {
   els.adminView.classList.add('hidden');
   els.collabView.classList.add('hidden');
   els.dashboardView.classList.add('hidden');
-  if (els.organogramaView) els.organogramaView.classList.add('hidden');
 
   els.userBadge.classList.toggle('hidden', !isLogged);
   els.logoutBtn.classList.toggle('hidden', !isLogged);
@@ -267,24 +262,17 @@ function renderLayout() {
     return;
   }
 
-  if (state.activeView === 'organograma') {
-    if (els.organogramaView) els.organogramaView.classList.remove('hidden');
-    return;
-  }
-
   if (isAdminRole(user)) els.adminView.classList.remove('hidden');
   else els.collabView.classList.remove('hidden');
 }
 
 function setActiveView(view) {
-  const allowed = ['dados', 'organograma', 'demandas'];
+  const allowed = ['dados', 'demandas'];
   const next = allowed.includes(view) ? view : 'demandas';
   state.activeView = next;
   renderLayout();
   if (next === 'dados') {
     refreshDashboard();
-  } else if (next === 'organograma') {
-    refreshOrganograma(true);
   }
 }
 
@@ -322,7 +310,7 @@ async function refreshDemandsAdmin() {
     d.matricula,
     d.descricao,
     d.prazo,
-    statusBadge(d.status),
+    `${statusBadge(d.status)}<br>${statusActionButtons(d)}`,
     d.prioridade,
     `<button class="btn danger" onclick="deleteDemand('${String(d.demanda || '').replace(/'/g, "\\'")}')">Remover</button>`,
   ]);
@@ -344,6 +332,7 @@ function statusBadge(status) {
 
 function canCurrentUserUpdateDemand(demanda) {
   if (!demanda || !state.user) return false;
+  if (isAdminRole(state.user)) return true;
   const emails = splitEmailList(demanda.email).map((e) => normalizeEmail(e));
   const userEmail = normalizeEmail(state.user.email);
   return emails.includes(userEmail);
@@ -437,37 +426,6 @@ async function refreshRequests() {
     `<div style="display:flex;gap:6px"><button class="btn accent" onclick="decideRequest(${r.id}, 'approved')">Aprovar</button><button class="btn danger" onclick="decideRequest(${r.id}, 'rejected')">Reprovar</button></div>`,
   ]);
   table.innerHTML = tableHTML(['Req', 'Demanda', 'Solicitante', 'Prazo Atual', 'Novo Prazo', 'Motivo', 'Ação'], rows);
-}
-
-function renderOrgNode(node) {
-  const children = (node.filhos || []).map((child) => renderOrgNode(child)).join('');
-  return `<li><div class=\"org-card\"><strong>${node.nome || 'Sem nome'}</strong>${node.cargo ? `<span>${node.cargo}</span>` : ''}</div>${children ? `<ul>${children}</ul>` : ''}</li>`;
-}
-
-function renderOrganograma() {
-  if (!els.organogramaContainer) return;
-  if (!state.organogramaRoots.length) {
-    els.organogramaContainer.innerHTML = '<p class=\"muted\">Nenhuma estrutura encontrada.</p>';
-    return;
-  }
-  const html = `<ul class=\"org-tree\">${state.organogramaRoots.map((n) => renderOrgNode(n)).join('')}</ul>`;
-  els.organogramaContainer.innerHTML = html;
-}
-
-async function refreshOrganograma(force = false) {
-  if (!els.organogramaContainer) return;
-  if (!force && state.organogramaRoots.length) {
-    renderOrganograma();
-    return;
-  }
-  els.organogramaContainer.innerHTML = '<p class=\"muted\">Carregando organograma...</p>';
-  try {
-    const res = await api('/organograma');
-    state.organogramaRoots = res.dados?.roots || [];
-    renderOrganograma();
-  } catch (error) {
-    els.organogramaContainer.innerHTML = `<p class=\"alert err\">${normalizeErr(error)}</p>`;
-  }
 }
 
 function renderChart(id, config) {
@@ -1259,9 +1217,6 @@ async function afterLoginRefresh() {
   if (state.activeView === 'dados') {
     await refreshDashboard();
   }
-  if (state.activeView === 'organograma') {
-    await refreshOrganograma(true);
-  }
 }
 
 window.toggleUser = async (id, ativo) => {
@@ -1568,7 +1523,13 @@ document.getElementById('updateStatusForm').addEventListener('submit', async (e)
   e.preventDefault();
   const fd = new FormData(e.target);
   try {
-    await api(`/demandas/${fd.get('demandaId')}`, {
+    const demandaId = String(fd.get('demandaId') || '').trim();
+    const demanda = (state.demandas || []).find((d) => String(d.demanda) === demandaId);
+    if (demanda && !canCurrentUserUpdateDemand(demanda)) {
+      showAlert('err', 'Somente responsáveis ou admins podem alterar o status desta demanda.');
+      return;
+    }
+    await api(`/demandas/${demandaId}`, {
       method: 'PUT',
       body: JSON.stringify({
         status: fd.get('status'),
@@ -1605,7 +1566,6 @@ document.getElementById('refreshUsersBtn').addEventListener('click', refreshUser
 document.getElementById('refreshRequestsBtn').addEventListener('click', refreshRequests);
 document.getElementById('refreshDemandsAdminBtn').addEventListener('click', refreshDemandsAdmin);
 document.getElementById('refreshDemandsCollabBtn').addEventListener('click', refreshDemandsCollab);
-if (els.refreshOrganogramaBtn) els.refreshOrganogramaBtn.addEventListener('click', () => refreshOrganograma(true));
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   setSession('', null);

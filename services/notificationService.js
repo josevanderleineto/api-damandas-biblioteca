@@ -257,6 +257,19 @@ async function enviarAtualizacaoDemanda(demanda) {
   return sendEmail({ to: demanda.email, subject, text, html: payload.html, attachments: payload.attachments });
 }
 
+async function enviarAtualizacaoStatusAdmin(demanda, emailDestino) {
+  const subject = `Cópia para admins - status atualizado (#${demanda.demanda})`;
+  const text = `O status da demanda mudou.\n\n${buildTextDemanda(demanda)}`;
+  const payload = buildHtmlEmail({
+    headline: 'Status atualizado',
+    contextText: 'Esta cópia foi enviada para administradores cadastrados.',
+    demanda,
+    badgeLabel: 'STATUS',
+    badgeColor: '#005cbb',
+  });
+  return sendEmail({ to: emailDestino, subject, text, html: payload.html, attachments: payload.attachments });
+}
+
 async function enviarLembretePrazo(demanda, diasRestantes) {
   let contexto = '';
   let badgeLabel = 'LEMBRETE';
@@ -297,6 +310,7 @@ module.exports = {
   enviarNovaDemanda,
   enviarNovaDemandaAdmin,
   enviarAtualizacaoDemanda,
+  enviarAtualizacaoStatusAdmin,
   enviarLembretePrazo,
   enviarTesteDireto,
 };

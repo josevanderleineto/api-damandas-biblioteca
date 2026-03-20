@@ -43,7 +43,7 @@ function pick(obj, keys) {
       return String(obj[key]).trim();
     }
   }
-  return '';
+  return undefined;
 }
 
 function pickRaw(obj, keys) {
@@ -161,6 +161,23 @@ function isResponsavelPelaDemanda(user, demanda) {
   const userEmail = normalizeEmail(user.email);
   const emails = demandEmails(demanda.email);
   return emails.includes(userEmail);
+}
+
+function normalizeStatusValue(status) {
+  const s = normalize(status).toLowerCase();
+  if (s.startsWith('pend')) return 'Pendente';
+  if (s.includes('andament')) return 'Em andamento';
+  if (s.includes('conclu')) return 'Concluído';
+  return status || '';
+}
+
+function isAllowedTransition(prev, next) {
+  const from = normalizeStatusValue(prev);
+  const to = normalizeStatusValue(next);
+  if (from === to) return true;
+  if (from === 'Pendente' && to === 'Em andamento') return true;
+  if (from === 'Em andamento' && to === 'Concluído') return true;
+  return false;
 }
 
 function collaboratorAllowedUpdate(dados) {
@@ -339,13 +356,21 @@ exports.atualizar = async (req, res) => {
       return res.status(403).json({ ok: false, erro: 'Acesso negado a esta demanda.' });
     }
 
-    if (!isResponsavel && typeof dadosRaw.status !== 'undefined') {
-      return res.status(403).json({ ok: false, erro: 'Apenas responsáveis podem alterar o status.' });
-    }
+    const dados = !isAdmin ? collaboratorAllowedUpdate(dadosRaw) : dadosRaw;
+    let statusChanged = false;
 
-    const dados = !isAdmin
-      ? collaboratorAllowedUpdate(dadosRaw)
-      : dadosRaw;
+    if (typeof dados.status !== 'undefined') {
+      if (!isResponsavel && !isAdmin) {
+        return res.status(403).json({ ok: false, erro: 'Apenas responsáveis ou admins podem alterar o status.' });
+      }
+      const normalizedNext = normalizeStatusValue(dados.status);
+      const normalizedPrev = normalizeStatusValue(demandaAtual.status);
+      if (!isAllowedTransition(normalizedPrev, normalizedNext) && !isAdmin) {
+        return res.status(400).json({ ok: false, erro: 'Transição de status inválida. Use Pendente → Em andamento → Concluído.' });
+      }
+      dados.status = normalizedNext;
+      statusChanged = normalizedPrev !== normalizedNext;
+    }
 
     if (dados.prazo && !isValidPrazo(dados.prazo)) {
       return res.status(400).json({ ok: false, erro: 'Prazo inválido. Use formato dd/mm/aaaa.' });
@@ -369,6 +394,17 @@ exports.atualizar = async (req, res) => {
         notificacao = await notificationService.enviarAtualizacaoDemanda(demandaAtualizada);
       } catch (error) {
         notificacao = { sent: false, reason: `Falha no envio: ${error.message}` };
+      }
+    }
+
+    if (statusChanged && notificationService.isEnabled()) {
+      try {
+        const adminEmails = await listarEmailsAdminsAtivos();
+        const destinatariosDemanda = demandEmails(demandaAtualizada.email);
+        const destinatarios = adminEmails.filter((email) => email && !destinatariosDemanda.includes(email));
+        await Promise.allSettled(destinatarios.map((email) => notificationService.enviarAtualizacaoStatusAdmin(demandaAtualizada, email)));
+      } catch (error) {
+        // não bloqueia fluxo em caso de falha
       }
     }
 
@@ -444,10 +480,6 @@ exports.testarEnvio = async (req, res) => {
 
 exports.solicitarProrrogacao = async (req, res) => {
   try {
-    if (isAdminRole(req.user.role)) {
-      return res.status(403).json({ ok: false, erro: 'Apenas colaboradores podem solicitar prorrogação.' });
-    }
-
     const demandaId = normalize(req.params?.id);
     const prazoSolicitado = normalize(req.body?.prazoSolicitado);
     const motivo = normalize(req.body?.motivo);
@@ -465,8 +497,10 @@ exports.solicitarProrrogacao = async (req, res) => {
       return res.status(404).json({ ok: false, erro: 'Demanda não encontrada.' });
     }
 
-    if (!userCanAccessDemand(req.user, demanda)) {
-      return res.status(403).json({ ok: false, erro: 'Você só pode solicitar prorrogação para suas demandas.' });
+    const isAdmin = isAdminRole(req.user.role);
+    const isResponsavel = isResponsavelPelaDemanda(req.user, demanda);
+    if (!isResponsavel && !isAdmin) {
+      return res.status(403).json({ ok: false, erro: 'Você só pode solicitar prorrogação para demandas que você é responsável.' });
     }
 
     const result = await db.query(
