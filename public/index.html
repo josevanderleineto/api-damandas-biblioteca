@@ -25,6 +25,7 @@
     <nav id="mainNav" class="tab-bar hidden">
       <button class="tab-btn active" data-view="demandas">Demandas</button>
       <button class="tab-btn" data-view="dados">Dados</button>
+      <button class="tab-btn" data-view="organograma">Organograma</button>
     </nav>
 
     <section id="alerts"></section>
@@ -313,7 +314,26 @@
           <h2>Últimas Demandas (filtrado)</h2>
           <span class="muted">Atualizado em <span id="dashboardUpdatedAt">--</span></span>
         </div>
-        <div class="table-wrap"><table id="dashboardTable"></table></div>
+      <div class="table-wrap"><table id="dashboardTable"></table></div>
+      </article>
+    </section>
+
+    <section id="organogramaView" class="hidden">
+      <article class="card">
+        <div class="card-head">
+          <h2>Organograma</h2>
+          <a class="btn ghost" href="https://organizational-chart-builder--jnetossa.replit.app/" target="_blank" rel="noopener noreferrer">Abrir em nova aba</a>
+        </div>
+        <p class="muted">Visualização interativa do organograma da equipe.</p>
+        <div class="iframe-wrap">
+          <iframe
+            class="embed-frame"
+            src="https://organizational-chart-builder--jnetossa.replit.app/"
+            title="Organograma"
+            loading="lazy"
+            allowfullscreen
+          ></iframe>
+        </div>
       </article>
     </section>
 

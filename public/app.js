@@ -36,6 +36,7 @@ const els = {
   adminView: document.getElementById('adminView'),
   collabView: document.getElementById('collabView'),
   dashboardView: document.getElementById('dashboardView'),
+  organogramaView: document.getElementById('organogramaView'),
   mainNav: document.getElementById('mainNav'),
   tabButtons: Array.from(document.querySelectorAll('[data-view]')),
   userBadge: document.getElementById('userBadge'),
@@ -244,6 +245,7 @@ function renderLayout() {
   els.adminView.classList.add('hidden');
   els.collabView.classList.add('hidden');
   els.dashboardView.classList.add('hidden');
+  if (els.organogramaView) els.organogramaView.classList.add('hidden');
 
   els.userBadge.classList.toggle('hidden', !isLogged);
   els.logoutBtn.classList.toggle('hidden', !isLogged);
@@ -262,12 +264,17 @@ function renderLayout() {
     return;
   }
 
+  if (state.activeView === 'organograma' && els.organogramaView) {
+    els.organogramaView.classList.remove('hidden');
+    return;
+  }
+
   if (isAdminRole(user)) els.adminView.classList.remove('hidden');
   else els.collabView.classList.remove('hidden');
 }
 
 function setActiveView(view) {
-  const allowed = ['dados', 'demandas'];
+  const allowed = ['dados', 'demandas', 'organograma'];
   const next = allowed.includes(view) ? view : 'demandas';
   state.activeView = next;
   renderLayout();

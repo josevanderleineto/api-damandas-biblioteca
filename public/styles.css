@@ -104,6 +104,19 @@ body.auth-mode .topbar { margin-bottom: 16px; }
 .card-actions select { width: auto; padding: 8px 10px; }
 .card-actions .btn { padding: 8px 10px; }
 
+.iframe-wrap {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.embed-frame {
+  width: 100%;
+  min-height: 720px;
+  border: 0;
+}
+
 .form { display: grid; gap: 10px; }
 .filters-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: end; }
 label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
@@ -178,6 +191,7 @@ th { background: #f4f8ff; }
 
 @media (max-width: 600px) {
   table { min-width: 620px; }
+  .embed-frame { min-height: 520px; }
 }
 
 .hidden { display: none !important; }
