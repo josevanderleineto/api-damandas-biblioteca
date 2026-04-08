@@ -1,8 +1,13 @@
 const sheetsService = require('./sheetsService');
 const notificationService = require('./notificationService');
 const notificationRegistry = require('./notificationRegistryService');
+const adminRecipientsService = require('./adminRecipientsService');
 
 const reminderSentCache = new Set();
+
+const ALERTA_ATRASADO = '🔴ATRASADO';
+const ALERTA_NO_PRAZO = '🟢NO PRAZO';
+const APP_TIME_ZONE = process.env.TZ || 'America/Bahia';
 
 function normalize(value) {
   return String(value || '').normalize('NFKC').trim().toLowerCase();
@@ -28,12 +33,12 @@ function parseDateBr(dateBr) {
 }
 
 function daysDiffFromToday(targetDate) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
 
-  const target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-  const diffMs = target.getTime() - today.getTime();
-  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  const targetEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+  const diffMs = targetEnd.getTime() - todayStart.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
 function shouldSkipStatus(status) {
@@ -42,19 +47,19 @@ function shouldSkipStatus(status) {
 }
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function buildReminderKey(tipo) {
   return `${todayKey()}:${tipo}`;
 }
 
-function isWeekend(date) {
-  const day = date.getDay();
-  return day === 0 || day === 6;
-}
-
-function nextBusinessRunDateFromNow() {
+function nextDailyRunDateFromNow() {
   const now = new Date();
   const next = new Date(now);
 
@@ -62,11 +67,6 @@ function nextBusinessRunDateFromNow() {
 
   // Se já passou de 10h, agenda para o próximo dia.
   if (now.getTime() >= next.getTime()) {
-    next.setDate(next.getDate() + 1);
-  }
-
-  // Pula sábado/domingo.
-  while (isWeekend(next)) {
     next.setDate(next.getDate() + 1);
   }
 
@@ -85,16 +85,26 @@ function nextRunDate(intervalMinutes) {
   if (intervalMinutes) {
     return new Date(Date.now() + intervalMinutes * 60 * 1000);
   }
-  return nextBusinessRunDateFromNow();
+  return nextDailyRunDateFromNow();
 }
 
 function formatDateTimeLocal(date) {
-  return date.toLocaleString('pt-BR');
+  return date.toLocaleString('pt-BR', { timeZone: APP_TIME_ZONE });
 }
 
 async function executarLembretesPrazo() {
   const linhas = await sheetsService.listar();
   const dados = linhas.length > 1 ? linhas.slice(1) : [];
+
+  let adminEmails = [];
+  if (notificationService.isEnabled()) {
+    try {
+      adminEmails = await adminRecipientsService.listarDestinatariosAdmins();
+    } catch (error) {
+      console.error(`[lembretes] falha ao listar admins: ${error.message}`);
+      adminEmails = [];
+    }
+  }
 
   let avaliadas = 0;
   let enviadas = 0;
@@ -126,13 +136,27 @@ async function executarLembretesPrazo() {
     }
 
     const diasRestantes = daysDiffFromToday(prazoDate);
-    if (diasRestantes > 1) {
-      continue;
+
+    const alertaEsperado = diasRestantes < 0 ? ALERTA_ATRASADO : ALERTA_NO_PRAZO;
+    if (demanda.alerta !== alertaEsperado) {
+      try {
+        await sheetsService.atualizar(demanda.demanda, { alerta: alertaEsperado });
+        demanda.alerta = alertaEsperado;
+      } catch (error) {
+        // não bloqueia envio caso falhe ao atualizar alerta
+      }
     }
 
     avaliadas += 1;
 
-    const tipo = diasRestantes < 0 ? 'atrasada' : diasRestantes === 0 ? 'vence_hoje' : 'vence_amanha';
+    const tipo =
+      diasRestantes < 0
+        ? 'atrasada'
+        : diasRestantes === 0
+          ? 'vence_hoje'
+          : diasRestantes === 1
+            ? 'vence_amanha'
+            : 'em_aberto';
     const reminderKey = buildReminderKey(tipo);
     const cacheKey = `${demanda.demanda}:${reminderKey}`;
 
@@ -154,6 +178,17 @@ async function executarLembretesPrazo() {
         reminderSentCache.add(cacheKey);
         await notificationRegistry.markReminderSent(demanda.demanda, reminderKey);
         enviadas += 1;
+
+        if (adminEmails.length) {
+          const destinatariosDemanda = adminRecipientsService.splitEmailRecipients(demanda.email);
+          const adminsFiltrados = adminEmails.filter((email) => !destinatariosDemanda.includes(email));
+
+          if (adminsFiltrados.length) {
+            await Promise.allSettled(
+              adminsFiltrados.map((email) => notificationService.enviarLembretePrazoAdmin(demanda, diasRestantes, email))
+            );
+          }
+        }
       }
     } catch (error) {
       // segue para próximas demandas mesmo com erro em uma
@@ -168,12 +203,8 @@ function iniciarAgendadorLembretes() {
 
   const executarCicloAgendado = async () => {
     try {
-      if (!isWeekend(new Date())) {
-        const result = await executarLembretesPrazo();
-        console.log(`[lembretes] ciclo executado: avaliadas=${result.avaliadas}, enviadas=${result.enviadas}, ignoradas=${result.ignoradas}`);
-      } else {
-        console.log('[lembretes] fim de semana: ciclo pulado');
-      }
+      const result = await executarLembretesPrazo();
+      console.log(`[lembretes] ciclo executado: avaliadas=${result.avaliadas}, enviadas=${result.enviadas}, ignoradas=${result.ignoradas}`);
     } catch (error) {
       console.error(`[lembretes] falha no ciclo: ${error.message}`);
     }
@@ -185,7 +216,7 @@ function iniciarAgendadorLembretes() {
 
     const label = intervalMinutes
       ? `a cada ${intervalMinutes} minuto(s)`
-      : 'dias úteis às 10:00';
+      : 'diariamente às 10:00';
 
     console.log(`[lembretes] próximo ciclo: ${formatDateTimeLocal(nextRun)} (${label})`);
 
@@ -195,7 +226,8 @@ function iniciarAgendadorLembretes() {
     }, delay);
   };
 
-  // Executa imediatamente ao iniciar para cobrir atrasos por indisponibilidade do servidor.
+  // Executa imediatamente ao iniciar para cobrir atrasos por indisponibilidade do servidor
+  // e enviar os lembretes assim que alguém abrir o sistema após o horário programado.
   executarCicloAgendado().then(() => {
     scheduleNext();
   }).catch((error) => {

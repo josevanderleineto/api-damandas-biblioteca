@@ -26,6 +26,7 @@
       <button class="tab-btn active" data-view="demandas">Demandas</button>
       <button class="tab-btn" data-view="dados">Dados</button>
       <button class="tab-btn" data-view="organograma">Organograma</button>
+      <button class="tab-btn" data-view="config">Configurações</button>
     </nav>
 
     <section id="alerts"></section>
@@ -41,6 +42,35 @@
             <input type="password" name="senha" required />
           </label>
           <button class="btn primary" type="submit">Entrar</button>
+          <button id="forgotToggleBtn" class="btn ghost" type="button">Esqueci minha senha</button>
+        </form>
+      </article>
+
+      <article id="forgotPanel" class="card hidden">
+        <div class="card-head">
+          <h2>Recuperar acesso</h2>
+          <button id="forgotBackBtn" class="btn ghost" type="button">Voltar</button>
+        </div>
+        <form id="forgotPasswordForm" class="form">
+          <label>Email cadastrado
+            <input type="email" name="email" required />
+          </label>
+          <button class="btn primary" type="submit">Enviar código</button>
+          <small class="hint">Enviaremos um código de redefinição para o e-mail informado.</small>
+        </form>
+        <hr />
+        <form id="resetPasswordForm" class="form">
+          <label>Código recebido por e-mail
+            <input name="token" placeholder="Cole o código aqui" required />
+          </label>
+          <label>Nova senha
+            <input type="password" name="novaSenha" minlength="6" required />
+          </label>
+          <label>Confirmar nova senha
+            <input type="password" name="confirmacao" minlength="6" required />
+          </label>
+          <button class="btn accent" type="submit">Redefinir</button>
+          <small class="hint">Após redefinir, você será autenticado automaticamente.</small>
         </form>
       </article>
     </section>
@@ -107,6 +137,17 @@
           </form>
         </article>
       </div>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Resumo semanal</h2>
+          <span class="muted">Envio manual do relatório automático</span>
+        </div>
+        <p class="muted">Dispara agora o mesmo resumo que será enviado às segundas-feiras para todos os usuários ativos com e-mail válido.</p>
+        <div class="card-actions">
+          <button id="runWeeklyReportBtn" class="btn primary" type="button">Enviar relatório agora</button>
+        </div>
+      </article>
 
       <article class="card">
         <div class="card-head">
@@ -181,6 +222,7 @@
             <button class="btn accent" type="submit">Enviar Solicitação</button>
           </form>
         </article>
+
       </div>
     </section>
 
@@ -334,6 +376,45 @@
             allowfullscreen
           ></iframe>
         </div>
+      </article>
+    </section>
+
+    <section id="configView" class="hidden">
+      <div class="grid two">
+        <article class="card">
+          <h2>Minha Conta</h2>
+          <dl class="info-list">
+            <div><dt>Nome</dt><dd id="configNome">-</dd></div>
+            <div><dt>Email</dt><dd id="configEmail">-</dd></div>
+            <div><dt>Matrícula</dt><dd id="configMatricula">-</dd></div>
+            <div><dt>Perfil</dt><dd id="configRole">-</dd></div>
+          </dl>
+        </article>
+
+        <article class="card">
+          <h2>Segurança</h2>
+          <form class="form" data-form="change-password">
+            <label>Senha atual
+              <input type="password" name="senhaAtual" required />
+            </label>
+            <label>Nova senha
+              <input type="password" name="novaSenha" minlength="6" required />
+            </label>
+            <label>Confirmar nova senha
+              <input type="password" name="confirmacao" minlength="6" required />
+            </label>
+            <button class="btn primary" type="submit">Salvar nova senha</button>
+            <small class="hint">Disponível apenas para usuários logados.</small>
+          </form>
+        </article>
+      </div>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Encerrar sessão</h2>
+        </div>
+        <p>Use esta ação para sair do sistema neste navegador.</p>
+        <button id="configLogoutBtn" class="btn ghost" type="button">Sair</button>
       </article>
     </section>
 

@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: api-demandas-render
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --omit=dev
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 20.20.0
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: America/Bahia
+      - key: DATABASE_SSL
+        value: "true"
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: BACKGROUND_JOBS_ENABLED
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ROOT_LOGIN
+        sync: false
+      - key: ROOT_PASSWORD
+        sync: false
+      - key: SPREADSHEET_ID
+        sync: false
+      - key: SHEET_NAME
+        sync: false
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false

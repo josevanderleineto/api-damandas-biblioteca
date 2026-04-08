@@ -55,3 +55,16 @@ CREATE TABLE IF NOT EXISTS demanda_notifications (
 
 CREATE INDEX IF NOT EXISTS idx_demanda_notifications_assignment ON demanda_notifications(assignment_sent_at);
 CREATE INDEX IF NOT EXISTS idx_demanda_notifications_reminder ON demanda_notifications(last_reminder_sent_at);
+
+CREATE TABLE IF NOT EXISTS weekly_demand_reports (
+  report_key TEXT PRIMARY KEY,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  summary_json JSONB NOT NULL,
+  sent_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_weekly_demand_reports_sent_at ON weekly_demand_reports(sent_at);
+CREATE INDEX IF NOT EXISTS idx_weekly_demand_reports_period_end ON weekly_demand_reports(period_end);

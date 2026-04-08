@@ -25,13 +25,14 @@ async function run() {
   await client.query(sql);
 
   const checks = await client.query(
-    "SELECT to_regclass('public.users') AS users_table, to_regclass('public.prazo_requests') AS prazo_table, to_regclass('public.demanda_notifications') AS notif_table"
+    "SELECT to_regclass('public.users') AS users_table, to_regclass('public.prazo_requests') AS prazo_table, to_regclass('public.demanda_notifications') AS notif_table, to_regclass('public.weekly_demand_reports') AS weekly_report_table"
   );
 
   console.log('Schema aplicado com sucesso.');
   console.log('users:', checks.rows[0].users_table);
   console.log('prazo_requests:', checks.rows[0].prazo_table);
   console.log('demanda_notifications:', checks.rows[0].notif_table);
+  console.log('weekly_demand_reports:', checks.rows[0].weekly_report_table);
 
   await client.end();
 }

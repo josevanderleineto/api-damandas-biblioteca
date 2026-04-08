@@ -5,6 +5,7 @@ Aplicativo desktop em Electron + API Express para registrar e acompanhar demanda
 ## Uso em localhost (Windows e macOS)
 - A equipe continua usando em `http://localhost:3000`. Scripts rápidos: `Iniciar-Sistema.command` (macOS) ou `npm run desktop:dev`.
 - Documentos: `GUIA-RAPIDO-LOCAL.md` (uso sem terminal) e `GUIA-APP-DESKTOP.md` (build e execução do app desktop).
+- Deploy web no Render: `DEPLOY-RENDER.md`.
 - Requisitos: Node.js LTS instalado, `.env` preenchido e `npm install` antes da primeira execução.
 
 ## Rodar com Docker
@@ -21,17 +22,29 @@ Aplicativo desktop em Electron + API Express para registrar e acompanhar demanda
 2. Campos essenciais:
    - Banco/Postgres: `DATABASE_URL`, `DATABASE_SSL` (true/false).
    - Autenticação: `JWT_SECRET`, `JWT_EXPIRES_IN`, `ROOT_LOGIN`, `ROOT_PASSWORD`.
+   - URLs do sistema: `APP_URL` (base usada em links enviados por e-mail; padrão local `http://localhost:3000`) e `PASSWORD_RESET_URL` (opcional; se vazio, usa `APP_URL`).
+   - Execução de agendadores: `BACKGROUND_JOBS_ENABLED` (padrão `true`; use `false` em instâncias secundárias como Render para evitar duplicidade de ciclos automáticos).
    - Google Sheets: `SPREADSHEET_ID`, `SHEET_NAME`, `GOOGLE_CREDENTIALS_JSON` (JSON ou base64). Alternativa: arquivo `credentials.json` na raiz.
    - SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` (+ URLs/caminhos de logos opcionais).
-   - Lembretes: `REMINDER_INTERVAL_MINUTES` (opcional). Vazio = roda dias úteis às 10:00 (TZ do servidor). Ex.: `720` para lembretes a cada 12h.
+   - Lembretes: `REMINDER_INTERVAL_MINUTES` (opcional). Vazio = roda todos os dias às 10:00 (TZ do servidor). Ex.: `720` para lembretes a cada 12h.
    - Monitor da planilha: `ASSIGNMENT_SYNC_INTERVAL_MINUTES` (opcional). Padrão 1 minuto para verificar linhas novas/alteradas direto no Google Sheets e disparar o e-mail de atribuição se ainda não foi enviado.
+   - Relatório semanal: `WEEKLY_REPORT_HOUR`, `WEEKLY_REPORT_MINUTE`, `WEEKLY_REPORT_EMAILS` (opcional). Padrão: segunda-feira às 09:00, enviado para todos os usuários ativos com e-mail válido.
 3. Nunca versionar `.env` ou `credentials.json`. Quem clonar pelo GitHub deve criar o próprio `.env` com dados reais da sua planilha, banco e e-mail.
 
 ## Lembretes automáticos
 - O agendador fica em `services/reminderService.js`.
-- Padrão: executa em dias úteis às 10:00 (fuso definido por `TZ`, padrão `America/Bahia` no `ecosystem.config.js`). Na subida do servidor ele roda imediatamente para cobrir atrasos se a máquina ficou desligada.
-- Novo: se `REMINDER_INTERVAL_MINUTES` estiver definido (>0), o ciclo roda a cada N minutos (pula fins de semana) — útil para lembretes a cada 12h.
+- Padrão: executa todos os dias às 10:00 (fuso definido por `TZ`, padrão `America/Bahia` no `ecosystem.config.js`). Na subida do servidor ele roda imediatamente para cobrir atrasos se a máquina ficou desligada.
+- Se `REMINDER_INTERVAL_MINUTES` estiver definido (>0), o ciclo roda a cada N minutos, também sem pular fins de semana.
+- Quando o lembrete dispara, ele é enviado diariamente para toda demanda em aberto com e-mail válido, e uma cópia separada é enviada para todos os admins/root ativos. Você também pode forçar cópias administrativas extras com `ADMIN_NOTIFICATION_EMAILS`. Se nenhum admin válido for encontrado, o sistema usa `SMTP_USER` como fallback.
 - Evita disparos duplicados no mesmo dia com registro no banco. Endpoint manual para admins: `POST /demandas/notificacoes/lembretes`.
+
+## Relatório semanal das demandas
+- O agendador fica em `services/weeklyReportService.js`.
+- Padrão: executa toda segunda-feira às 09:00 no fuso configurado em `TZ` (padrão `America/Bahia`). Se o servidor estiver online na segunda, o envio é feito automaticamente no horário configurado.
+- O e-mail vai para todos os usuários ativos com endereço válido cadastrado no sistema. Você pode adicionar destinatários extras com `WEEKLY_REPORT_EMAILS`.
+- O relatório traz a evolução da semana anterior, com totais atuais, variação em relação ao relatório anterior, demandas criadas no período, concluídas no período, atrasadas e vencendo nos próximos dias.
+- Para garantir o envio no horário, mantenha a API/app rodando em uma máquina ligada na segunda-feira. Se o processo estiver desligado, o envio não acontece naquele momento.
+- Para reprocessar manualmente, use `POST /demandas/notificacoes/relatorio-semanal`.
 
 ## Atribuições criadas direto na planilha
 - Serviço `assignmentWatcherService.js` verifica a planilha a cada `ASSIGNMENT_SYNC_INTERVAL_MINUTES` (padrão 1 min).

@@ -37,6 +37,7 @@ const els = {
   collabView: document.getElementById('collabView'),
   dashboardView: document.getElementById('dashboardView'),
   organogramaView: document.getElementById('organogramaView'),
+  configView: document.getElementById('configView'),
   mainNav: document.getElementById('mainNav'),
   tabButtons: Array.from(document.querySelectorAll('[data-view]')),
   userBadge: document.getElementById('userBadge'),
@@ -63,6 +64,9 @@ const els = {
   dashboardFilterSummary: document.getElementById('dashboardFilterSummary'),
   dashboardClearFiltersBtn: document.getElementById('dashboardClearFiltersBtn'),
   dashboardReloadBtn: document.getElementById('dashboardReloadBtn'),
+  forgotToggleBtn: document.getElementById('forgotToggleBtn'),
+  forgotPanel: document.getElementById('forgotPanel'),
+  forgotBackBtn: document.getElementById('forgotBackBtn'),
   createResponsavelPicker: document.getElementById('createResponsavelPicker'),
   createResponsaveisChips: document.getElementById('createResponsaveisChips'),
   addCreateResponsavelBtn: document.getElementById('addCreateResponsavelBtn'),
@@ -76,6 +80,12 @@ const els = {
   assignDemandId: document.getElementById('assignDemandId'),
   closeAssignModal: document.getElementById('closeAssignModal'),
   cancelAssignBtn: document.getElementById('cancelAssignBtn'),
+  configNome: document.getElementById('configNome'),
+  configEmail: document.getElementById('configEmail'),
+  configMatricula: document.getElementById('configMatricula'),
+  configRole: document.getElementById('configRole'),
+  configLogoutBtn: document.getElementById('configLogoutBtn'),
+  runWeeklyReportBtn: document.getElementById('runWeeklyReportBtn'),
 };
 
 function showAlert(type, message) {
@@ -91,14 +101,68 @@ function normalizeErr(err) {
   return err.erro || err.message || 'Erro inesperado.';
 }
 
+function passwordsDontMatch(pass, confirm) {
+  return String(pass || '') !== String(confirm || '');
+}
+
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
 
   const res = await fetch(path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    if (state.token) {
+      showAlert('err', normalizeErr(data) || 'Sessão expirada. Faça login novamente.');
+      setSession('', null);
+    }
+    throw data;
+  }
   if (!res.ok) throw data;
   return data;
+}
+
+async function forgotPassword(email) {
+  return api('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+async function runWeeklyReportNow() {
+  return api('/demandas/notificacoes/relatorio-semanal', {
+    method: 'POST',
+  });
+}
+
+async function resetPassword(token, novaSenha) {
+  return api('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, novaSenha }),
+  });
+}
+
+async function changePassword(senhaAtual, novaSenha) {
+  return api('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ senhaAtual, novaSenha }),
+  });
+}
+
+function showForgotPanel() {
+  if (els.forgotPanel) els.forgotPanel.classList.remove('hidden');
+}
+
+function hideForgotPanel() {
+  if (els.forgotPanel) els.forgotPanel.classList.add('hidden');
+}
+
+function updateConfigAccountInfo() {
+  const user = state.user || {};
+  if (els.configNome) els.configNome.textContent = user.nome || '-';
+  if (els.configEmail) els.configEmail.textContent = user.email || '-';
+  if (els.configMatricula) els.configMatricula.textContent = user.matricula || '-';
+  if (els.configRole) els.configRole.textContent = user.role || '-';
 }
 
 function parseDateBr(dateStr) {
@@ -201,6 +265,10 @@ function prazoBucket(dateStr) {
 function isLateDemand(demanda) {
   if (!demanda) return false;
 
+  const alerta = normalizeText(demanda.alerta);
+  if (alerta.includes('atras')) return true;
+  if (alerta.includes('prazo')) return false;
+
   const done = isDoneStatus(demanda.status);
   const prazo = parseDateBr(demanda.prazo);
   if (!prazo) return false;
@@ -232,6 +300,8 @@ function setSession(token, user) {
   if (token) localStorage.setItem('token', token);
   else localStorage.removeItem('token');
   renderLayout();
+  hideForgotPanel();
+  updateConfigAccountInfo();
 }
 
 function renderLayout() {
@@ -246,6 +316,7 @@ function renderLayout() {
   els.collabView.classList.add('hidden');
   els.dashboardView.classList.add('hidden');
   if (els.organogramaView) els.organogramaView.classList.add('hidden');
+   if (els.configView) els.configView.classList.add('hidden');
 
   els.userBadge.classList.toggle('hidden', !isLogged);
   els.logoutBtn.classList.toggle('hidden', !isLogged);
@@ -264,6 +335,12 @@ function renderLayout() {
     return;
   }
 
+  if (state.activeView === 'config' && els.configView) {
+    updateConfigAccountInfo();
+    els.configView.classList.remove('hidden');
+    return;
+  }
+
   if (state.activeView === 'organograma' && els.organogramaView) {
     els.organogramaView.classList.remove('hidden');
     return;
@@ -274,7 +351,7 @@ function renderLayout() {
 }
 
 function setActiveView(view) {
-  const allowed = ['dados', 'demandas', 'organograma'];
+  const allowed = ['dados', 'demandas', 'organograma', 'config'];
   const next = allowed.includes(view) ? view : 'demandas';
   state.activeView = next;
   renderLayout();
@@ -650,10 +727,28 @@ function populateDashboardFilterOptions(allDemandas) {
   }
 }
 
+function prazoBucketWithAlerta(demanda) {
+  if (!demanda) return '';
+
+  const alerta = normalizeText(demanda.alerta);
+  if (alerta.includes('atras')) return 'atrasada';
+  if (alerta.includes('prazo')) {
+    const diff = daysUntil(demanda.prazo);
+    if (diff === null) return 'futuro';
+    const safeDiff = Math.max(diff, 0);
+    if (safeDiff === 0) return 'hoje';
+    if (safeDiff <= 7) return 'ate7';
+    if (safeDiff <= 14) return 'ate14';
+    return 'futuro';
+  }
+
+  return prazoBucket(demanda.prazo);
+}
+
 function buildPrazoDataset(demandas) {
   const buckets = { atrasada: 0, hoje: 0, ate7: 0, ate14: 0, futuro: 0 };
   demandas.forEach((d) => {
-    const bucket = prazoBucket(d.prazo);
+    const bucket = prazoBucketWithAlerta(d);
     if (!bucket) return;
     buckets[bucket] += 1;
   });
@@ -840,8 +935,7 @@ function computeTeamStats(demandas) {
     const tokens = splitTextList(d.responsavel);
     const keysToCount = tokens.length ? tokens : ['Sem responsável'];
 
-    const diffPrazo = daysUntil(d.prazo);
-    const isOverdueOpen = !done && diffPrazo !== null && diffPrazo < 0;
+    const isOverdueOpen = !done && isLateDemand(d);
 
     const prazo = parseDateBr(d.prazo);
     const conclusao = parseDateBr(d.conclusao);
@@ -1551,6 +1645,85 @@ document.getElementById('updateStatusForm').addEventListener('submit', async (e)
   }
 });
 
+const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+if (forgotPasswordForm) {
+  forgotPasswordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await forgotPassword(fd.get('email'));
+      showAlert('ok', 'Se o e-mail estiver cadastrado, enviamos um código de redefinição.');
+      e.target.reset();
+    } catch (error) {
+      showAlert('err', normalizeErr(error));
+    }
+  });
+}
+
+const resetPasswordForm = document.getElementById('resetPasswordForm');
+if (resetPasswordForm) {
+  resetPasswordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const token = fd.get('token');
+    const novaSenha = fd.get('novaSenha');
+    const confirmacao = fd.get('confirmacao');
+    if (passwordsDontMatch(novaSenha, confirmacao)) {
+      showAlert('err', 'As senhas não conferem.');
+      return;
+    }
+    try {
+      const res = await resetPassword(token, novaSenha);
+      showAlert('ok', 'Senha redefinida. Você está logado.');
+      setSession(res.token, res.user);
+      e.target.reset();
+    } catch (error) {
+      showAlert('err', normalizeErr(error));
+    }
+  });
+}
+
+if (els.forgotToggleBtn) {
+  els.forgotToggleBtn.addEventListener('click', () => {
+    showForgotPanel();
+  });
+}
+
+if (els.forgotBackBtn) {
+  els.forgotBackBtn.addEventListener('click', () => {
+    hideForgotPanel();
+  });
+}
+
+if (els.configLogoutBtn) {
+  els.configLogoutBtn.addEventListener('click', () => {
+    setSession('', null);
+    showAlert('ok', 'Sessão finalizada.');
+  });
+}
+
+document.querySelectorAll('form[data-form=\"change-password\"]').forEach((form) => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const senhaAtual = fd.get('senhaAtual');
+    const novaSenha = fd.get('novaSenha');
+    const confirmacao = fd.get('confirmacao');
+    if (passwordsDontMatch(novaSenha, confirmacao)) {
+      showAlert('err', 'As senhas não conferem.');
+      return;
+    }
+    try {
+      const res = await changePassword(senhaAtual, novaSenha);
+      showAlert('ok', 'Senha alterada com sucesso.');
+      setSession(res.token, res.user);
+      form.reset();
+    } catch (error) {
+      showAlert('err', normalizeErr(error));
+    }
+  });
+});
+
 document.getElementById('requestDeadlineForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -1568,6 +1741,37 @@ document.getElementById('requestDeadlineForm').addEventListener('submit', async 
     showAlert('err', normalizeErr(error));
   }
 });
+
+if (els.runWeeklyReportBtn) {
+  els.runWeeklyReportBtn.addEventListener('click', async () => {
+    const btn = els.runWeeklyReportBtn;
+    const originalText = btn.textContent;
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+      const res = await runWeeklyReportNow();
+      if (res.sent) {
+        const total = res.summary?.snapshot?.total ?? 0;
+        const atrasadas = res.summary?.snapshot?.overdue ?? 0;
+        const vencendo = res.summary?.snapshot?.dueSoon ?? 0;
+        const recipients = res.recipients ?? 0;
+        showAlert(
+          'ok',
+          `Relatório semanal enviado para ${recipients} destinatário(s). Total: ${total}, atrasadas: ${atrasadas}, vencendo em 7 dias: ${vencendo}.`
+        );
+      } else {
+        showAlert('err', res.reason || 'Não foi possível enviar o relatório semanal.');
+      }
+    } catch (error) {
+      showAlert('err', normalizeErr(error));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+}
 
 document.getElementById('refreshUsersBtn').addEventListener('click', refreshUsers);
 document.getElementById('refreshRequestsBtn').addEventListener('click', refreshRequests);

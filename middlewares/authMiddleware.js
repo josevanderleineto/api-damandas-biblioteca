@@ -32,7 +32,9 @@ function authenticateToken(req, res, next) {
 
     return next();
   } catch (error) {
-    return res.status(401).json({ ok: false, erro: 'Token inválido ou expirado.' });
+    const expired = error && error.name === 'TokenExpiredError';
+    const msg = expired ? 'Token expirado. Faça login novamente.' : 'Token inválido ou expirado.';
+    return res.status(401).json({ ok: false, erro: msg });
   }
 }
 

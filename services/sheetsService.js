@@ -72,6 +72,34 @@ function toIsoDateBr(dateBr) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function parseDateBr(dateBr) {
+  if (!dateBr || typeof dateBr !== 'string') return null;
+  const [dd, mm, yyyy] = dateBr.split('/');
+  if (!dd || !mm || !yyyy) return null;
+
+  const day = Number.parseInt(dd, 10);
+  const month = Number.parseInt(mm, 10);
+  const year = Number.parseInt(yyyy, 10);
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
+
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+
+  return date;
+}
+
+function endOfDay(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+const ALERTA_ATRASADO = '🔴ATRASADO';
+const ALERTA_NO_PRAZO = '🟢NO PRAZO';
+
 function mapRowToDemanda(row) {
   return {
     demanda: row[0] || '',
@@ -203,12 +231,17 @@ async function atualizar(demandaId, dados) {
   const atual = mapRowToDemanda(found.row);
 
   const novoPrazo = dados.prazo ?? atual.prazo;
-  const prazoIso = toIsoDateBr(novoPrazo);
+  const prazoDate = parseDateBr(novoPrazo);
 
   let alerta = dados.alerta;
   if (typeof alerta === 'undefined') {
-    if (prazoIso && new Date() > new Date(prazoIso)) {
-      alerta = '🔴ATRASADO';
+    if (prazoDate) {
+      const prazoLimite = endOfDay(prazoDate);
+      if (new Date() > prazoLimite) {
+        alerta = ALERTA_ATRASADO;
+      } else {
+        alerta = atual.alerta || ALERTA_NO_PRAZO;
+      }
     } else {
       alerta = atual.alerta;
     }

@@ -2,7 +2,9 @@ const sheetsService = require('../services/sheetsService');
 const gerarId = require('../utils/gerarId');
 const notificationService = require('../services/notificationService');
 const reminderService = require('../services/reminderService');
+const weeklyReportService = require('../services/weeklyReportService');
 const notificationRegistry = require('../services/notificationRegistryService');
+const adminRecipientsService = require('../services/adminRecipientsService');
 const db = require('../db/pool');
 
 function normalize(value) {
@@ -32,6 +34,23 @@ function parseDateBrToDate(dateBr) {
 
   return date;
 }
+
+function endOfDay(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function daysDiffFromToday(targetDate) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const targetEnd = endOfDay(targetDate);
+  const diffMs = targetEnd.getTime() - todayStart.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+const ALERTA_ATRASADO = '🔴ATRASADO';
+const ALERTA_NO_PRAZO = '🟢NO PRAZO';
 
 function isValidPrazo(dateBr) {
   return /^\d{2}\/\d{2}\/\d{4}$/.test(String(dateBr || '').trim()) && !!parseDateBrToDate(dateBr);
@@ -188,17 +207,29 @@ function collaboratorAllowedUpdate(dados) {
   };
 }
 
-async function listarEmailsAdminsAtivos() {
-  const result = await db.query(
-    `SELECT email
-       FROM users
-      WHERE role = 'admin'
-        AND ativo = TRUE`
-  );
+async function notificarAdminsDemanda(demanda, enviarNotificacaoAdmin) {
+  const resumo = { total: 0, enviados: 0, falhas: [] };
+  if (!notificationService.isEnabled()) return resumo;
 
-  return result.rows
-    .map((r) => normalizeEmail(r.email))
-    .filter((email) => email && isValidEmail(email));
+  try {
+    const adminEmails = await adminRecipientsService.listarDestinatariosAdmins();
+    const destinatariosDemanda = demandEmails(demanda.email);
+    const destinatarios = adminEmails.filter((email) => email && !destinatariosDemanda.includes(email));
+    resumo.total = destinatarios.length;
+
+    const results = await Promise.allSettled(destinatarios.map((email) => enviarNotificacaoAdmin(email)));
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled' && result.value?.sent) {
+        resumo.enviados += 1;
+      } else {
+        resumo.falhas.push(destinatarios[idx]);
+      }
+    });
+  } catch (error) {
+    resumo.falhas.push(`Erro geral: ${error.message}`);
+  }
+
+  return resumo;
 }
 
 exports.listar = async (req, res) => {
@@ -267,7 +298,8 @@ exports.criar = async (req, res) => {
     const dataCriacao = new Date().toLocaleDateString('pt-BR');
 
     const prazoDate = parseDateBrToDate(dados.prazo);
-    const alerta = prazoDate && new Date() > prazoDate ? '🔴ATRASADO' : '';
+    const prazoLimite = prazoDate ? endOfDay(prazoDate) : null;
+    const alerta = prazoDate && daysDiffFromToday(prazoDate) < 0 ? ALERTA_ATRASADO : ALERTA_NO_PRAZO;
 
     const linha = [
       id,
@@ -301,27 +333,10 @@ exports.criar = async (req, res) => {
       }
     }
 
-    let notificacaoAdmins = { total: 0, enviados: 0, falhas: [] };
-    if (notificationService.isEnabled()) {
-      try {
-        const adminEmails = await listarEmailsAdminsAtivos();
-        const destinatariosDemanda = demandEmails(emailsCell);
-        const destinatarios = adminEmails.filter((email) => email && !destinatariosDemanda.includes(email));
-        notificacaoAdmins.total = destinatarios.length;
-
-        const payload = mapLinhaParaDemanda(linha);
-        const results = await Promise.allSettled(
-          destinatarios.map((email) => notificationService.enviarNovaDemandaAdmin(payload, email))
-        );
-
-        results.forEach((r, idx) => {
-          if (r.status === 'fulfilled' && r.value?.sent) notificacaoAdmins.enviados += 1;
-          else notificacaoAdmins.falhas.push(destinatarios[idx]);
-        });
-      } catch (error) {
-        notificacaoAdmins.falhas.push(`Erro geral: ${error.message}`);
-      }
-    }
+    const notificacaoAdmins = await notificarAdminsDemanda(
+      demandaMapeada,
+      (email) => notificationService.enviarNovaDemandaAdmin(demandaMapeada, email)
+    );
 
     return res.status(201).json({
       ok: true,
@@ -397,18 +412,24 @@ exports.atualizar = async (req, res) => {
       }
     }
 
-    if (statusChanged && notificationService.isEnabled()) {
-      try {
-        const adminEmails = await listarEmailsAdminsAtivos();
-        const destinatariosDemanda = demandEmails(demandaAtualizada.email);
-        const destinatarios = adminEmails.filter((email) => email && !destinatariosDemanda.includes(email));
-        await Promise.allSettled(destinatarios.map((email) => notificationService.enviarAtualizacaoStatusAdmin(demandaAtualizada, email)));
-      } catch (error) {
-        // não bloqueia fluxo em caso de falha
-      }
-    }
+    const notificacaoAdmins = await notificarAdminsDemanda(
+      demandaAtualizada,
+      (email) => {
+        if (statusChanged) {
+          return notificationService.enviarAtualizacaoStatusAdmin(demandaAtualizada, email);
+        }
 
-    return res.status(200).json({ ok: true, ...result, notificacao });
+        return notificationService.enviarMovimentacaoDemandaAdmin(demandaAtualizada, email, {
+          subjectPrefix: 'demanda atualizada',
+          headline: 'Demanda atualizada',
+          contextText: 'A demanda recebeu uma movimentação/atualização no sistema e esta cópia foi enviada para administradores.',
+          badgeLabel: 'ATUALIZAÇÃO',
+          badgeColor: '#7f56d9',
+        });
+      }
+    );
+
+    return res.status(200).json({ ok: true, ...result, notificacao, notificacaoAdmins });
   } catch (error) {
     return res.status(500).json({ ok: false, erro: error.message });
   }
@@ -445,6 +466,20 @@ exports.executarAtribuicoesPlanilha = async (req, res) => {
   try {
     const watcher = require('../services/assignmentWatcherService'); // require tardio para evitar ciclos.
     const result = await watcher.verificarAtribuicoesPendentes();
+    return res.status(200).json({
+      ok: true,
+      emailAtivo: notificationService.isEnabled(),
+      motivoEmailInativo: notificationService.isEnabled() ? '' : notificationService.getDisabledReason(),
+      ...result,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, erro: error.message });
+  }
+};
+
+exports.executarRelatorioSemanal = async (req, res) => {
+  try {
+    const result = await weeklyReportService.executarResumoSemanal({ referenceDate: new Date(), force: true });
     return res.status(200).json({
       ok: true,
       emailAtivo: notificationService.isEnabled(),
@@ -611,8 +646,28 @@ exports.atribuirResponsaveis = async (req, res) => {
       return res.status(400).json({ ok: false, erro: 'Nenhum usuário ativo encontrado.' });
     }
 
-    const nomes = usuarios.map((u) => u.nome).join('; ');
-    const emailsCell = usuarios.map((u) => u.email).join('; ');
+    const emailsExistentes = demandEmails(demandaAtual.email);
+    const nomesExistentes = String(demandaAtual.responsavel || '')
+      .split(/[;,|]/g)
+      .map((v) => String(v || '').trim())
+      .filter(Boolean);
+
+    const emailsCombinados = Array.from(
+      new Set([
+        ...emailsExistentes,
+        ...usuarios.map((u) => normalizeEmail(u.email)).filter((email) => email && isValidEmail(email)),
+      ])
+    );
+
+    const nomesCombinados = Array.from(
+      new Set([
+        ...nomesExistentes,
+        ...usuarios.map((u) => u.nome).filter(Boolean),
+      ])
+    );
+
+    const emailsCell = emailsCombinados.join('; ');
+    const nomes = nomesCombinados.join('; ');
 
     await sheetsService.atualizar(demandaId, { responsavel: nomes, email: emailsCell });
     const demandaAtualizada = await sheetsService.buscarPorId(demandaId);
@@ -630,26 +685,10 @@ exports.atribuirResponsaveis = async (req, res) => {
       }
     }
 
-    let notificacaoAdmins = { total: 0, enviados: 0, falhas: [] };
-    if (notificationService.isEnabled()) {
-      try {
-        const adminEmails = await listarEmailsAdminsAtivos();
-        const destinatariosDemanda = demandEmails(emailsCell);
-        const destinatarios = adminEmails.filter((email) => email && !destinatariosDemanda.includes(email));
-        notificacaoAdmins.total = destinatarios.length;
-
-        const results = await Promise.allSettled(
-          destinatarios.map((email) => notificationService.enviarNovaDemandaAdmin(demandaAtualizada, email))
-        );
-
-        results.forEach((r, idx) => {
-          if (r.status === 'fulfilled' && r.value?.sent) notificacaoAdmins.enviados += 1;
-          else notificacaoAdmins.falhas.push(destinatarios[idx]);
-        });
-      } catch (error) {
-        notificacaoAdmins.falhas.push(`Erro geral: ${error.message}`);
-      }
-    }
+    const notificacaoAdmins = await notificarAdminsDemanda(
+      demandaAtualizada,
+      (email) => notificationService.enviarNovaDemandaAdmin(demandaAtualizada, email)
+    );
 
     return res.json({ ok: true, demanda: demandaAtualizada, notificacao, notificacaoAdmins });
   } catch (error) {

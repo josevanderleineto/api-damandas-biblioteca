@@ -1,6 +1,6 @@
 # App Desktop (Windows e macOS)
 
-O app desktop inicia o `server.js` localmente e abre o sistema no navegador (`http://localhost:3000/`). Use esta página para gerar instaladores em outras máquinas sem erro.
+O app desktop inicia o `server.js` localmente e abre o sistema no navegador (`http://localhost:3000/`).
 
 ## Checklist obrigatório antes de gerar
 - Node.js 20.x LTS e npm 10.x instalados.
@@ -41,6 +41,7 @@ No Windows, você terá dois formatos:
 - Porta padrão `3000` (ou `PORT` no `.env`). Se a porta estiver ocupada, o app tenta a próxima disponível.
 - No Windows/macOS empacotado, na **primeira execução** o app copia o `.env` empacotado para a pasta de dados do usuário (`userData`) para ficar editável e persistir entre updates.
 - Para usar `credentials.json` em vez de `GOOGLE_CREDENTIALS_JSON`, coloque o arquivo na mesma pasta do `.env` do `userData` (ou ao lado do executável).
+- Se você quiser que e-mails e instruções apontem para um endereço público fixo, preencha `APP_URL` no `.env`.
 
 ## Manual de instalação (Windows) — usuários finais
 > O app é seguro **quando baixado pelo link oficial** informado (ex.: TI/gestão do projeto). Se tiver qualquer dúvida sobre a procedência do arquivo, **não execute** e peça validação para a TI.
