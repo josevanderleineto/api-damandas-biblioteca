@@ -231,7 +231,10 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const { token, expiresAt } = await passwordResetService.createTokenForUser(user.id, 60);
-    const resetUrlBase = normalize(process.env.PASSWORD_RESET_URL || process.env.APP_URL || '');
+    let resetUrlBase = normalize(process.env.PASSWORD_RESET_URL || process.env.APP_URL || '');
+    if (resetUrlBase && !resetUrlBase.includes('/reset-password') && resetUrlBase === process.env.APP_URL) {
+      resetUrlBase = `${resetUrlBase}/reset-password`;
+    }
 
     let envio = { sent: false, reason: notificationService.getDisabledReason() };
     try {
