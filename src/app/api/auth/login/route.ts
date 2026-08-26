@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const login = normalize(body?.email || body?.login);
-    const senha = String(body?.senha || '');
+    const senha = String(body?.senha || '').trim();
 
     if (!login || !senha) {
       return NextResponse.json({ ok: false, erro: 'Campos obrigatórios: login/email, senha.' }, { status: 400 });
