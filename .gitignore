@@ -19,3 +19,4 @@ local-server.log
 .local-server.pid
 *.pid
 *.log
+*.tsbuildinfo
