@@ -3,7 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
-import { Users, UserPlus, Search, Edit2, UserCheck, UserX, Trash2, Loader2, Check, X, Shield } from 'lucide-react';
+import { Users, UserPlus, Search, Edit2, UserCheck, UserX, Trash2, Loader2, Check, X, Shield, Calendar, CalendarOff } from 'lucide-react';
+import { AusenciaModal } from '@/components/AusenciaModal';
+import { isUsuarioAusente, formatToDateBr } from '@/lib/ausencia';
 
 interface UserItem {
   id: string;
@@ -12,6 +14,11 @@ interface UserItem {
   matricula: string;
   role: 'admin' | 'colaborador' | 'root';
   ativo: boolean;
+  ausente?: boolean;
+  ausenteTipo?: string | null;
+  ausenteInicio?: string | null;
+  ausenteFim?: string | null;
+  ausenteMotivo?: string | null;
   createdAt: string;
 }
 
@@ -21,6 +28,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAusenciaModalOpen, setIsAusenciaModalOpen] = useState(false);
+  const [targetUserAusencia, setTargetUserAusencia] = useState<UserItem | null>(null);
 
   // Form states
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
@@ -214,6 +223,7 @@ export default function UsersPage() {
                     <th className="py-3.5 px-4">Matrícula</th>
                     <th className="py-3.5 px-4">Perfil</th>
                     <th className="py-3.5 px-4">Status</th>
+                    <th className="py-3.5 px-4">Disponibilidade</th>
                     <th className="py-3.5 px-4 text-right">Ações</th>
                   </tr>
                 </thead>
@@ -250,8 +260,38 @@ export default function UsersPage() {
                           {u.ativo ? 'Ativo' : 'Inativo'}
                         </button>
                       </td>
+                      <td className="py-3.5 px-4">
+                        {isUsuarioAusente(u) ? (
+                          <div className="inline-flex flex-col gap-0.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                            <span className="flex items-center gap-1.5">
+                              <CalendarOff className="w-3.5 h-3.5 text-amber-400" />
+                              {u.ausenteTipo || 'Ausente'}
+                            </span>
+                            {u.ausenteInicio && u.ausenteFim ? (
+                              <span className="text-[10px] text-amber-400/80 font-mono">
+                                {formatToDateBr(u.ausenteInicio)} a {formatToDateBr(u.ausenteFim)}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Disponível
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setTargetUserAusencia(u);
+                              setIsAusenciaModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                            title="Gerenciar Afastamento / Férias / Licença"
+                          >
+                            <Calendar className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => openEditModal(u)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
@@ -395,6 +435,14 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      {/* Ausencia Modal */}
+      <AusenciaModal
+        isOpen={isAusenciaModalOpen}
+        onClose={() => setIsAusenciaModalOpen(false)}
+        onSaved={fetchUsers}
+        targetUser={targetUserAusencia}
+      />
     </div>
   );
 }

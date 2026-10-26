@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/auth';
+import { getUserFromRequest, findUserById, sanitizeUser } from '@/lib/auth';
 
 export async function GET(req: Request) {
-  const user = await getUserFromRequest(req);
-  if (!user) {
+  const userToken = await getUserFromRequest(req);
+  if (!userToken) {
     return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
   }
-  return NextResponse.json({ ok: true, user });
+
+  const dbUser = await findUserById(userToken.id);
+  if (dbUser) {
+    return NextResponse.json({ ok: true, user: sanitizeUser(dbUser) });
+  }
+
+  return NextResponse.json({ ok: true, user: userToken });
 }

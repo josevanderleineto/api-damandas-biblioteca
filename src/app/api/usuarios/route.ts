@@ -32,7 +32,8 @@ export async function GET(req: Request) {
     }
 
     const result = await query(
-      `SELECT id, nome, email, matricula, role, ativo, created_at
+      `SELECT id, nome, email, matricula, role, ativo,
+              ausente, ausente_tipo, ausente_inicio, ausente_fim, ausente_motivo, created_at
          FROM users
         ORDER BY created_at DESC`
     );

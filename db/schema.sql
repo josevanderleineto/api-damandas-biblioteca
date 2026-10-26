@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Compatibilidade: adiciona coluna matricula em bases existentes
+-- Compatibilidade: adiciona coluna matricula e campos de ausência em bases existentes
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -20,6 +20,48 @@ BEGIN
      WHERE table_name = 'users' AND column_name = 'matricula'
   ) THEN
     ALTER TABLE users ADD COLUMN matricula TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'ausente'
+  ) THEN
+    ALTER TABLE users ADD COLUMN ausente BOOLEAN NOT NULL DEFAULT FALSE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'ausente_tipo'
+  ) THEN
+    ALTER TABLE users ADD COLUMN ausente_tipo TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'ausente_inicio'
+  ) THEN
+    ALTER TABLE users ADD COLUMN ausente_inicio DATE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'ausente_fim'
+  ) THEN
+    ALTER TABLE users ADD COLUMN ausente_fim DATE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'ausente_motivo'
+  ) THEN
+    ALTER TABLE users ADD COLUMN ausente_motivo TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'ausente_updated_at'
+  ) THEN
+    ALTER TABLE users ADD COLUMN ausente_updated_at TIMESTAMPTZ;
   END IF;
 END $$;
 
@@ -52,6 +94,51 @@ CREATE TABLE IF NOT EXISTS demanda_notifications (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'demanda_notifications' AND column_name = 'assignment_sent_at'
+  ) THEN
+    ALTER TABLE demanda_notifications ADD COLUMN assignment_sent_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'demanda_notifications' AND column_name = 'assignment_hash'
+  ) THEN
+    ALTER TABLE demanda_notifications ADD COLUMN assignment_hash TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'demanda_notifications' AND column_name = 'last_reminder_key'
+  ) THEN
+    ALTER TABLE demanda_notifications ADD COLUMN last_reminder_key TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'demanda_notifications' AND column_name = 'last_reminder_sent_at'
+  ) THEN
+    ALTER TABLE demanda_notifications ADD COLUMN last_reminder_sent_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'demanda_notifications' AND column_name = 'created_at'
+  ) THEN
+    ALTER TABLE demanda_notifications ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'demanda_notifications' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE demanda_notifications ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_demanda_notifications_assignment ON demanda_notifications(assignment_sent_at);
 CREATE INDEX IF NOT EXISTS idx_demanda_notifications_reminder ON demanda_notifications(last_reminder_sent_at);

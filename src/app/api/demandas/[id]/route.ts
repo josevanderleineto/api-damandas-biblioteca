@@ -3,6 +3,8 @@ import * as sheetsService from '@/lib/googleSheets';
 import * as mailer from '@/lib/mailer';
 import * as adminRecipientsService from '@/lib/services/adminRecipientsService';
 import { getUserFromRequest } from '@/lib/auth';
+import { query } from '@/lib/db';
+import { isUsuarioAusente, getDescricaoAusencia } from '@/lib/ausencia';
 import { normalize, normalizeEmail, isValidEmail } from '@/lib/utils';
 
 function splitEmailList(value: string) {
@@ -175,6 +177,34 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
       dados.status = normalizedNext;
       statusChanged = normalizedPrev !== normalizedNext;
+    }
+
+    if (isAdmin && (dadosRaw.email !== undefined || dadosRaw.matricula !== undefined)) {
+      const targetPrazo = dadosRaw.prazo || demandaAtual.prazo;
+      const emailsList = normalizeEmailList(dadosRaw.email || '');
+      const matriculasList = String(dadosRaw.matricula || '')
+        .split(/[;,|]/g)
+        .map((m) => m.trim().toLowerCase())
+        .filter(Boolean);
+
+      if (emailsList.length > 0 || matriculasList.length > 0) {
+        const usersCheck = await query(
+          `SELECT id, nome, email, matricula, ausente, ausente_tipo, ausente_inicio, ausente_fim, ausente_motivo
+             FROM users
+            WHERE ativo = TRUE
+              AND (LOWER(email) = ANY($1) OR LOWER(matricula) = ANY($2))`,
+          [emailsList, matriculasList]
+        );
+
+        for (const u of usersCheck.rows) {
+          if (isUsuarioAusente(u, targetPrazo)) {
+            return NextResponse.json(
+              { ok: false, erro: `Não é possível atribuir a demanda: ${getDescricaoAusencia(u)}` },
+              { status: 400 }
+            );
+          }
+        }
+      }
     }
 
     const payload = isAdmin && typeof dados.email !== 'undefined'

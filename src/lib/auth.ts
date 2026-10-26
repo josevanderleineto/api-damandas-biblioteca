@@ -18,6 +18,11 @@ export interface UserSanitized {
   matricula: string;
   role: 'admin' | 'colaborador' | 'root';
   ativo: boolean;
+  ausente: boolean;
+  ausenteTipo?: string | null;
+  ausenteInicio?: string | null;
+  ausenteFim?: string | null;
+  ausenteMotivo?: string | null;
   createdAt: string;
 }
 
@@ -49,14 +54,34 @@ export function isRootCredentials(login: string, senha: string): boolean {
   return rootEnabled() && normalize(login) === getRootLogin() && normalize(senha) === getRootPassword();
 }
 
+function formatDateIsoOnly(val: any): string | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const str = String(val).trim();
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  return str;
+}
+
 export function sanitizeUser(user: any): UserSanitized {
   return {
-    id: user.id,
+    id: String(user.id),
     nome: user.nome,
     email: user.email,
     matricula: user.matricula || '',
     role: user.role,
     ativo: user.ativo ?? true,
+    ausente: !!user.ausente,
+    ausenteTipo: user.ausente_tipo || user.ausenteTipo || null,
+    ausenteInicio: formatDateIsoOnly(user.ausente_inicio || user.ausenteInicio),
+    ausenteFim: formatDateIsoOnly(user.ausente_fim || user.ausenteFim),
+    ausenteMotivo: user.ausente_motivo || user.ausenteMotivo || null,
     createdAt: user.created_at || user.createdAt || new Date().toISOString(),
   };
 }
@@ -94,7 +119,8 @@ export function verifyToken(token: string): UserTokenPayload | null {
 
 export async function findUserByEmail(email: string) {
   const result = await query(
-    `SELECT id, nome, email, matricula, senha_hash, role, ativo, created_at
+    `SELECT id, nome, email, matricula, senha_hash, role, ativo,
+            ausente, ausente_tipo, ausente_inicio, ausente_fim, ausente_motivo, created_at
        FROM users
       WHERE email = $1`,
     [normalizeEmail(email)]
@@ -104,7 +130,8 @@ export async function findUserByEmail(email: string) {
 
 export async function findUserById(id: string) {
   const result = await query(
-    `SELECT id, nome, email, matricula, senha_hash, role, ativo, created_at
+    `SELECT id, nome, email, matricula, senha_hash, role, ativo,
+            ausente, ausente_tipo, ausente_inicio, ausente_fim, ausente_motivo, created_at
        FROM users
       WHERE id = $1`,
     [id]

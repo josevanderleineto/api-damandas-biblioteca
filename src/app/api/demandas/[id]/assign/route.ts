@@ -14,12 +14,14 @@ function demandEmails(demandaEmail: string) {
     .filter((v) => v && isValidEmail(v));
 }
 
+import { isUsuarioAusente, getDescricaoAusencia } from '@/lib/ausencia';
+
 async function carregarUsuariosAtivosPorIds(ids: string[]) {
   const unique = Array.from(new Set((Array.isArray(ids) ? ids : []).filter(Boolean)));
   if (!unique.length) return [];
 
   const result = await query(
-    `SELECT id, nome, email, matricula
+    `SELECT id, nome, email, matricula, ausente, ausente_tipo, ausente_inicio, ausente_fim, ausente_motivo
        FROM users
       WHERE id = ANY($1)
         AND ativo = TRUE`,
@@ -77,6 +79,16 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const usuarios = await carregarUsuariosAtivosPorIds(userIds);
     if (!usuarios.length) {
       return NextResponse.json({ ok: false, erro: 'Nenhum usuário ativo encontrado.' }, { status: 400 });
+    }
+
+    // Validação: não permitir atribuir demanda a colaborador ausente
+    for (const u of usuarios) {
+      if (isUsuarioAusente(u, demandaAtual.prazo)) {
+        return NextResponse.json(
+          { ok: false, erro: `Não é possível atribuir a demanda: ${getDescricaoAusencia(u)}` },
+          { status: 400 }
+        );
+      }
     }
 
     const emailsExistentes = demandEmails(demandaAtual.email);

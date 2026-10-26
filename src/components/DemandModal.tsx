@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { X, Check, Loader2, Calendar, Clock, AlertTriangle, Send } from 'lucide-react';
+import { isUsuarioAusente, getDescricaoAusencia, formatToDateBr } from '@/lib/ausencia';
 
 interface DemandModalProps {
   isOpen: boolean;
@@ -69,6 +70,16 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
     
     const user = usuarios.find((u: any) => String(u.id) === selectedId);
     if (user) {
+      if (isUsuarioAusente(user, prazo)) {
+        setFeedback({
+          type: 'error',
+          message: `Não é possível atribuir a demanda: ${getDescricaoAusencia(user)}`,
+        });
+        e.target.value = "";
+        return;
+      }
+
+      setFeedback(null);
       setResponsavel(prev => prev ? `${prev}, ${user.nome}` : user.nome || '');
       if (user.matricula) {
         setMatricula(prev => prev ? `${prev}, ${user.matricula}` : user.matricula);
@@ -115,6 +126,26 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
     if (!token) return;
     setLoading(true);
     setFeedback(null);
+
+    if (isAdmin && (email || responsavel || matricula)) {
+      const emailList = (email || '').toLowerCase().split(/[;,|\n\r]/g).map(s => s.trim()).filter(Boolean);
+      const matList = (matricula || '').toLowerCase().split(/[;,|\n\r]/g).map(s => s.trim()).filter(Boolean);
+
+      for (const u of usuarios) {
+        const uEmail = (u.email || '').toLowerCase().trim();
+        const uMat = (u.matricula || '').toLowerCase().trim();
+        if (emailList.includes(uEmail) || (uMat && matList.includes(uMat))) {
+          if (isUsuarioAusente(u, prazo)) {
+            setFeedback({
+              type: 'error',
+              message: `Não é possível atribuir a demanda: ${getDescricaoAusencia(u)}`,
+            });
+            setLoading(false);
+            return;
+          }
+        }
+      }
+    }
 
     try {
       const url = isNew ? '/api/demandas' : `/api/demandas/${demanda.demanda}`;
@@ -203,7 +234,7 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isAdmin && isNew && usuarios.length > 0 && (
+          {isAdmin && usuarios.length > 0 && (
             <div className="mb-4 p-3 bg-slate-900/50 border border-sky-500/20 rounded-xl">
               <label className="block text-xs font-semibold text-sky-400 uppercase tracking-wider mb-1.5 flex items-center gap-2">
                 Preencher com Usuário Cadastrado
@@ -214,11 +245,15 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
               >
                 <option value="">-- Selecione um usuário --</option>
-                {usuarios.map((u: any) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nome} {u.matricula ? `(${u.matricula})` : ''} - {u.email}
-                  </option>
-                ))}
+                {usuarios.map((u: any) => {
+                  const ausente = isUsuarioAusente(u, prazo);
+                  return (
+                    <option key={u.id} value={u.id} disabled={ausente}>
+                      {ausente ? `⚠️ [AUSENTE - ${u.ausenteTipo || 'Afastado'}${u.ausenteFim ? ` até ${formatToDateBr(u.ausenteFim)}` : ''}] ` : ''}
+                      {u.nome} {u.matricula ? `(${u.matricula})` : ''} - {u.email}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           )}

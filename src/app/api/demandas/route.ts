@@ -4,6 +4,8 @@ import * as mailer from '@/lib/mailer';
 import * as notificationRegistry from '@/lib/services/notificationRegistryService';
 import * as adminRecipientsService from '@/lib/services/adminRecipientsService';
 import { getUserFromRequest } from '@/lib/auth';
+import { query } from '@/lib/db';
+import { isUsuarioAusente, getDescricaoAusencia } from '@/lib/ausencia';
 import { normalize, normalizeEmail, isValidEmail, gerarId } from '@/lib/utils';
 
 const ALERTA_ATRASADO = '🔴ATRASADO';
@@ -147,6 +149,32 @@ export async function POST(req: Request) {
 
     if (!isValidPrazo(prazo)) {
       return NextResponse.json({ ok: false, erro: 'Prazo inválido. Use formato dd/mm/aaaa.' }, { status: 400 });
+    }
+
+    // Validação: não permitir atribuir demanda a colaboradores ausentes
+    const emailsList = normalizeEmailList(email);
+    const matriculasList = String(matricula || '')
+      .split(/[;,|]/g)
+      .map((m) => m.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (emailsList.length > 0 || matriculasList.length > 0) {
+      const usersCheck = await query(
+        `SELECT id, nome, email, matricula, ausente, ausente_tipo, ausente_inicio, ausente_fim, ausente_motivo
+           FROM users
+          WHERE ativo = TRUE
+            AND (LOWER(email) = ANY($1) OR LOWER(matricula) = ANY($2))`,
+        [emailsList, matriculasList]
+      );
+
+      for (const u of usersCheck.rows) {
+        if (isUsuarioAusente(u, prazo)) {
+          return NextResponse.json(
+            { ok: false, erro: `Não é possível atribuir a demanda: ${getDescricaoAusencia(u)}` },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     const emailsCell = emailsToCell(email);
