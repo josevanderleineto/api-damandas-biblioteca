@@ -26,7 +26,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, user: rootUser, token });
     }
 
-    const user = await findUserByEmail(login);
+    let user: any = null;
+    try {
+      user = await findUserByEmail(login);
+    } catch (dbError: any) {
+      console.error('[login] Erro de banco ao buscar usuário:', dbError.message);
+      // Retry uma vez (cold start do Neon)
+      try {
+        user = await findUserByEmail(login);
+      } catch (retryError: any) {
+        console.error('[login] Retry falhou:', retryError.message);
+        return NextResponse.json(
+          { ok: false, erro: 'Erro temporário de conexão com o banco. Tente novamente.' },
+          { status: 503 }
+        );
+      }
+    }
+
     if (!user) {
       return NextResponse.json({ ok: false, erro: 'Credenciais inválidas.' }, { status: 401 });
     }
@@ -43,6 +59,7 @@ export async function POST(req: Request) {
     const token = generateToken(user);
     return NextResponse.json({ ok: true, user: sanitizeUser(user), token });
   } catch (error: any) {
+    console.error('[login] Erro inesperado:', error.message);
     return NextResponse.json({ ok: false, erro: error.message }, { status: 500 });
   }
 }

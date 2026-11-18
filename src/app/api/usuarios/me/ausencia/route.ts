@@ -36,6 +36,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
     }
 
+    if (user.id === 'root') {
+      return NextResponse.json({
+        ok: true,
+        ausencia: {
+          ausente: false,
+          ausenteTipo: '',
+          ausenteInicio: '',
+          ausenteFim: '',
+          ausenteMotivo: '',
+          descricao: '',
+        },
+      });
+    }
+
     const dbUser = await findUserById(user.id);
     if (!dbUser) {
       return NextResponse.json({ ok: false, erro: 'Usuário não encontrado' }, { status: 404 });
@@ -62,6 +76,10 @@ export async function PUT(req: Request) {
     const user = await getUserFromRequest(req);
     if (!user) {
       return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
+    }
+
+    if (user.id === 'root') {
+      return NextResponse.json({ ok: false, erro: 'Usuário root não gerencia ausência.' }, { status: 400 });
     }
 
     const body = await req.json().catch(() => ({}));

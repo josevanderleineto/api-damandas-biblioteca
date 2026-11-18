@@ -37,6 +37,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     const targetUserId = params?.id;
+    if (targetUserId === 'root' || !/^\d+$/.test(String(targetUserId || ''))) {
+      return NextResponse.json({ ok: false, erro: 'ID de usuário inválido.' }, { status: 400 });
+    }
     const isSelf = String(user.id) === String(targetUserId);
     const isAdmin = ['admin', 'root'].includes(user.role);
 

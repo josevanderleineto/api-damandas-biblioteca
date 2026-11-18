@@ -23,7 +23,7 @@ interface UserItem {
 }
 
 export default function UsersPage() {
-  const { token, isAdmin } = useAuth();
+  const { token, isAdmin, logout, authFetch } = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -45,9 +45,8 @@ export default function UsersPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/usuarios', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch('/api/usuarios');
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok) {
         setUsers(data.dados);
@@ -95,14 +94,14 @@ export default function UsersPage() {
       const url = editingUser ? `/api/usuarios/${editingUser.id}` : '/api/usuarios';
       const method = editingUser ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ nome, email, matricula, senha, role }),
       });
+      if (res.status === 401) return;
 
       const data = await res.json();
 
@@ -125,14 +124,14 @@ export default function UsersPage() {
   const toggleUserStatus = async (user: UserItem) => {
     if (!token) return;
     try {
-      const res = await fetch(`/api/usuarios/${user.id}/status`, {
+      const res = await authFetch(`/api/usuarios/${user.id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ ativo: !user.ativo }),
       });
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok) {
         fetchUsers();
@@ -145,10 +144,10 @@ export default function UsersPage() {
   const deleteUser = async (userId: string) => {
     if (!token || !confirm('Tem certeza que deseja remover este usuário?')) return;
     try {
-      const res = await fetch(`/api/usuarios/${userId}`, {
+      const res = await authFetch(`/api/usuarios/${userId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok) {
         fetchUsers();

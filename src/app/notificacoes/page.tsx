@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Bell, Mail, Clock, FileSpreadsheet, Calendar, Send, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function NotificationsPage() {
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<{ action: string; type: 'success' | 'error'; text: string; details?: any } | null>(null);
 
@@ -16,13 +16,13 @@ export default function NotificationsPage() {
     setResultMessage(null);
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
       });
+      if (res.status === 401) return;
 
       const data = await res.json();
 

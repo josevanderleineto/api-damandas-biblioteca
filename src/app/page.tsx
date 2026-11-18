@@ -101,7 +101,7 @@ function splitTextList(value: string) {
 }
 
 export default function DashboardPage() {
-  const { token, isAdmin, user, isLoading } = useAuth();
+  const { token, isAdmin, user, isLoading, logout, authFetch } = useAuth();
   const [demandas, setDemandas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -131,9 +131,10 @@ export default function DashboardPage() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const res = await fetch('/api/demandas', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch('/api/demandas');
+      if (res.status === 401) {
+        return;
+      }
       const data = await res.json();
       if (Array.isArray(data)) {
         setDemandas(data);
@@ -170,14 +171,14 @@ export default function DashboardPage() {
   const handleQuickStatus = async (demandaId: string, nextStatus: string) => {
     if (!token) return;
     try {
-      const res = await fetch(`/api/demandas/${demandaId}`, {
+      const res = await authFetch(`/api/demandas/${demandaId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status: nextStatus }),
       });
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok) {
         fetchDemandas();
@@ -192,10 +193,10 @@ export default function DashboardPage() {
   const handleDelete = async (id: string) => {
     if (!token || !confirm(`Tem certeza que deseja excluir a demanda #${id}?`)) return;
     try {
-      const res = await fetch(`/api/demandas/${id}`, {
+      const res = await authFetch(`/api/demandas/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok) {
         fetchDemandas();

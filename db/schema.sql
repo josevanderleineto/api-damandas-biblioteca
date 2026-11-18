@@ -12,9 +12,30 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Compatibilidade: adiciona coluna matricula e campos de ausência em bases existentes
+-- Compatibilidade: adiciona coluna matricula, senha_hash, updated_at e campos de ausência em bases existentes
 DO $$
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'senha_hash'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+       WHERE table_name = 'users' AND column_name = 'senha'
+    ) THEN
+      ALTER TABLE users RENAME COLUMN senha TO senha_hash;
+    ELSE
+      ALTER TABLE users ADD COLUMN senha_hash TEXT;
+    END IF;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'users' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE users ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
      WHERE table_name = 'users' AND column_name = 'matricula'

@@ -27,7 +27,10 @@ async function notificarAdminsUsuario(titulo: string, contexto: string, usuario:
 export async function GET(req: Request) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user || !['admin', 'root'].includes(user.role)) {
+    if (!user) {
+      return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
+    }
+    if (!['admin', 'root'].includes(user.role)) {
       return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 });
     }
 
@@ -47,7 +50,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user || !['admin', 'root'].includes(user.role)) {
+    if (!user) {
+      return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
+    }
+    if (!['admin', 'root'].includes(user.role)) {
       return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 });
     }
 

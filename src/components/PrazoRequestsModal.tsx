@@ -25,7 +25,7 @@ export const PrazoRequestsModal = ({
   onClose: () => void;
   onDecided: () => void;
 }) => {
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
   const [requests, setRequests] = useState<PrazoRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [decidingId, setDecidingId] = useState<number | null>(null);
@@ -35,9 +35,8 @@ export const PrazoRequestsModal = ({
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/demandas/prazo-solicitacoes?pending=true', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch('/api/demandas/prazo-solicitacoes?pending=true');
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok) {
         setRequests(data.dados);
@@ -61,14 +60,14 @@ export const PrazoRequestsModal = ({
 
     try {
       const adminNote = adminNoteMap[requestId] || '';
-      const res = await fetch(`/api/demandas/prazo-solicitacoes/${requestId}`, {
+      const res = await authFetch(`/api/demandas/prazo-solicitacoes/${requestId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status, adminNote }),
       });
+      if (res.status === 401) return;
 
       const data = await res.json();
       if (data.ok) {

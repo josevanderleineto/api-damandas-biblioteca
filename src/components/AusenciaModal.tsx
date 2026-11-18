@@ -21,7 +21,7 @@ interface AusenciaModalProps {
 }
 
 export const AusenciaModal = ({ isOpen, onClose, onSaved, targetUser }: AusenciaModalProps) => {
-  const { token, user: currentUser } = useAuth();
+  const { token, user: currentUser, authFetch } = useAuth();
 
   const isManagingOther = !!(targetUser && String(targetUser.id) !== String(currentUser?.id));
   const displayedUser = targetUser || currentUser;
@@ -53,9 +53,8 @@ export const AusenciaModal = ({ isOpen, onClose, onSaved, targetUser }: Ausencia
   const fetchMyAusencia = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/usuarios/me/ausencia', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch('/api/usuarios/me/ausencia');
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok && data.ausencia) {
         setAusente(!!data.ausencia.ausente);
@@ -100,11 +99,10 @@ export const AusenciaModal = ({ isOpen, onClose, onSaved, targetUser }: Ausencia
         ? `/api/usuarios/${targetUser.id}/ausencia`
         : '/api/usuarios/me/ausencia';
 
-      const res = await fetch(endpoint, {
+      const res = await authFetch(endpoint, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           ausente,
@@ -114,6 +112,7 @@ export const AusenciaModal = ({ isOpen, onClose, onSaved, targetUser }: Ausencia
           ausenteMotivo: ausente ? ausenteMotivo : null,
         }),
       });
+      if (res.status === 401) return;
 
       const data = await res.json();
       if (!res.ok || !data.ok) {

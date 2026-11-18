@@ -7,7 +7,7 @@ import { AusenciaModal } from './AusenciaModal';
 import { isUsuarioAusente, formatToDateBr } from '@/lib/ausencia';
 
 export const Navbar = () => {
-  const { user, token, logout, isAdmin } = useAuth();
+  const { user, token, logout, isAdmin, authFetch } = useAuth();
   const pathname = usePathname();
   const [isAusenciaOpen, setIsAusenciaOpen] = useState(false);
   const [ausenciaInfo, setAusenciaInfo] = useState<{
@@ -20,9 +20,8 @@ export const Navbar = () => {
   const fetchAusencia = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/usuarios/me/ausencia', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch('/api/usuarios/me/ausencia');
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok && data.ausencia) {
         setAusenciaInfo(data.ausencia);

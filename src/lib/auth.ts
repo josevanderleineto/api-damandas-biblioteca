@@ -129,6 +129,9 @@ export async function findUserByEmail(email: string) {
 }
 
 export async function findUserById(id: string) {
+  if (!id || id === 'root' || !/^\d+$/.test(String(id).trim())) {
+    return null;
+  }
   const result = await query(
     `SELECT id, nome, email, matricula, senha_hash, role, ativo,
             ausente, ausente_tipo, ausente_inicio, ausente_fim, ausente_motivo, created_at

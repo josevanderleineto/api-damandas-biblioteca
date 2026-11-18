@@ -13,7 +13,7 @@ interface DemandModalProps {
 }
 
 export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalProps) => {
-  const { token, isAdmin, user } = useAuth();
+  const { token, isAdmin, user, authFetch } = useAuth();
 
   const isNew = !demanda;
   const [loading, setLoading] = useState(false);
@@ -50,9 +50,8 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
     if (!token) return;
     setLoadingUsuarios(true);
     try {
-      const res = await fetch('/api/usuarios', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch('/api/usuarios');
+      if (res.status === 401) return;
       const data = await res.json();
       if (data.ok) {
         setUsuarios(data.dados || []);
@@ -157,14 +156,14 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
           ? { responsavel, descricao, matricula, email, prazo, status, prioridade, conclusao, tempoExecucao }
           : { status, conclusao, tempoExecucao };
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
+      if (res.status === 401) return;
 
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -190,14 +189,14 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
     setFeedback(null);
 
     try {
-      const res = await fetch(`/api/demandas/${demanda.demanda}/prazo-solicitacao`, {
+      const res = await authFetch(`/api/demandas/${demanda.demanda}/prazo-solicitacao`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ prazoSolicitado, motivo: motivoExtensao }),
       });
+      if (res.status === 401) return;
 
       const data = await res.json();
       if (!res.ok || !data.ok) {

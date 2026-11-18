@@ -248,7 +248,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user || !['admin', 'root'].includes(user.role)) {
+    if (!user) {
+      return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
+    }
+    if (!['admin', 'root'].includes(user.role)) {
       return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 });
     }
 

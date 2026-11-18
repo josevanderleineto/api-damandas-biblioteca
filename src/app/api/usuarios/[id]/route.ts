@@ -27,7 +27,10 @@ async function notificarAdminsUsuario(titulo: string, contexto: string, usuario:
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user || !['admin', 'root'].includes(user.role)) {
+    if (!user) {
+      return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
+    }
+    if (!['admin', 'root'].includes(user.role)) {
       return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 });
     }
 
@@ -40,8 +43,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const role = normalize(body?.role || 'colaborador').toLowerCase();
     const senha = String(body?.senha || '').trim();
 
-    if (!userId) {
-      return NextResponse.json({ ok: false, erro: 'ID de usuário obrigatório.' }, { status: 400 });
+    if (!userId || userId === 'root' || !/^\d+$/.test(userId)) {
+      return NextResponse.json({ ok: false, erro: 'ID de usuário inválido.' }, { status: 400 });
     }
 
     if (!nome || !email || !matricula || !matricula.trim()) {
@@ -114,12 +117,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user || !['admin', 'root'].includes(user.role)) {
+    if (!user) {
+      return NextResponse.json({ ok: false, erro: 'Não autorizado' }, { status: 401 });
+    }
+    if (!['admin', 'root'].includes(user.role)) {
       return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 });
     }
 
     const userId = normalize(params?.id);
-    if (!userId) return NextResponse.json({ ok: false, erro: 'ID obrigatório.' }, { status: 400 });
+    if (!userId || userId === 'root' || !/^\d+$/.test(userId)) return NextResponse.json({ ok: false, erro: 'ID obrigatório ou inválido.' }, { status: 400 });
 
     const usuario = await query('SELECT id, nome, email, matricula, role, ativo FROM users WHERE id = $1', [userId]);
 
