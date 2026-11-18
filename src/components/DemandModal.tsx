@@ -9,7 +9,12 @@ interface DemandModalProps {
   isOpen: boolean;
   onClose: () => void;
   demanda: any | null;
-  onSaved: () => void;
+  onSaved: (info?: {
+    demandaId?: string;
+    status?: string;
+    descricao?: string;
+    isStatusTransition?: boolean;
+  }) => void;
 }
 
 export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalProps) => {
@@ -170,11 +175,24 @@ export const DemandModal = ({ isOpen, onClose, demanda, onSaved }: DemandModalPr
         throw new Error(data.erro || 'Falha ao salvar demanda.');
       }
 
+      const oldStatus = demanda?.status || '';
+      const newStatus = status;
+      const isStatusTransition =
+        oldStatus.toLowerCase() !== newStatus.toLowerCase() &&
+        (newStatus.toLowerCase().includes('andament') || newStatus.toLowerCase().includes('conclu'));
+      const savedDemandaId = isNew ? (data.demanda?.demanda || data.demanda || '') : (demanda?.demanda || '');
+      const savedDescricao = descricao;
+
       setFeedback({ type: 'success', message: isNew ? 'Demanda criada com sucesso!' : 'Demanda atualizada com sucesso!' });
       setTimeout(() => {
         onClose();
-        onSaved();
-      }, 1000);
+        onSaved({
+          demandaId: String(savedDemandaId),
+          status: newStatus,
+          descricao: savedDescricao,
+          isStatusTransition,
+        });
+      }, 700);
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message });
     } finally {

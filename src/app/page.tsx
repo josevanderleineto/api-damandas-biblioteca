@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
 import { DemandModal } from '@/components/DemandModal';
+import { DiarioModal } from '@/components/DiarioModal';
 import { PrazoRequestsModal } from '@/components/PrazoRequestsModal';
 import {
   LayoutDashboard,
@@ -125,6 +126,14 @@ export default function DashboardPage() {
   const [isDemandModalOpen, setIsDemandModalOpen] = useState(false);
   const [selectedDemanda, setSelectedDemanda] = useState<any | null>(null);
   const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
+  const [diarioContext, setDiarioContext] = useState<{
+    isOpen: boolean;
+    demandaId?: string;
+    novoStatus?: string;
+    descricao?: string;
+  }>({
+    isOpen: false,
+  });
 
   const fetchDemandas = async () => {
     if (!token) return;
@@ -182,6 +191,18 @@ export default function DashboardPage() {
       const data = await res.json();
       if (data.ok) {
         fetchDemandas();
+
+        // Se o status for alterado para 'Em andamento' ou 'Concluído', abre o Diário de Bordo para relatar
+        const nextLower = (nextStatus || '').toLowerCase();
+        if (nextLower.includes('andament') || nextLower.includes('conclu')) {
+          const target = demandas.find((d) => String(d.demanda) === String(demandaId));
+          setDiarioContext({
+            isOpen: true,
+            demandaId,
+            novoStatus: nextStatus,
+            descricao: target?.descricao || '',
+          });
+        }
       } else {
         alert(data.erro || 'Falha ao alterar status.');
       }
@@ -806,7 +827,24 @@ export default function DashboardPage() {
         isOpen={isDemandModalOpen}
         onClose={() => setIsDemandModalOpen(false)}
         demanda={selectedDemanda}
-        onSaved={fetchDemandas}
+        onSaved={(info) => {
+          fetchDemandas();
+          if (info?.isStatusTransition && info.demandaId) {
+            setDiarioContext({
+              isOpen: true,
+              demandaId: info.demandaId,
+              novoStatus: info.status || '',
+              descricao: info.descricao || '',
+            });
+          }
+        }}
+      />
+
+      {/* Diário de Bordo Modal - Abertura Automática ao alterar status */}
+      <DiarioModal
+        isOpen={diarioContext.isOpen}
+        onClose={() => setDiarioContext((prev) => ({ ...prev, isOpen: false }))}
+        contextInfo={diarioContext}
       />
 
       {/* Deadline Extension Requests Modal */}

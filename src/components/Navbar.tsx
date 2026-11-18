@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { BookOpen, LayoutDashboard, Users, Bell, LogOut, ShieldCheck, User, CalendarOff, Calendar } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Users, Bell, LogOut, ShieldCheck, User, CalendarOff, Calendar, BookMarked } from 'lucide-react';
 import { AusenciaModal } from './AusenciaModal';
 import { isUsuarioAusente, formatToDateBr } from '@/lib/ausencia';
 
@@ -41,6 +41,7 @@ export const Navbar = () => {
 
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/diario', label: 'Diário de Bordo', icon: BookMarked },
     ...(isAdmin
       ? [
           { href: '/usuarios', label: 'Usuários', icon: Users },

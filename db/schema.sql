@@ -176,3 +176,22 @@ CREATE TABLE IF NOT EXISTS weekly_demand_reports (
 
 CREATE INDEX IF NOT EXISTS idx_weekly_demand_reports_sent_at ON weekly_demand_reports(sent_at);
 CREATE INDEX IF NOT EXISTS idx_weekly_demand_reports_period_end ON weekly_demand_reports(period_end);
+
+-- Diário de Bordo dos colaboradores
+CREATE TABLE IF NOT EXISTS diario_bordo (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  user_nome TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  data DATE NOT NULL DEFAULT CURRENT_DATE,
+  titulo TEXT,
+  conteudo TEXT NOT NULL,
+  demandas_relacionadas TEXT,
+  horas_trabalhadas NUMERIC(4,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_diario_bordo_user_id ON diario_bordo(user_id);
+CREATE INDEX IF NOT EXISTS idx_diario_bordo_data ON diario_bordo(data DESC);
+CREATE INDEX IF NOT EXISTS idx_diario_bordo_created_at ON diario_bordo(created_at DESC);
