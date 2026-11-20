@@ -195,3 +195,28 @@ CREATE TABLE IF NOT EXISTS diario_bordo (
 CREATE INDEX IF NOT EXISTS idx_diario_bordo_user_id ON diario_bordo(user_id);
 CREATE INDEX IF NOT EXISTS idx_diario_bordo_data ON diario_bordo(data DESC);
 CREATE INDEX IF NOT EXISTS idx_diario_bordo_created_at ON diario_bordo(created_at DESC);
+
+-- Comunicados gerais (avisos, chamadas de reunião, etc.)
+CREATE TABLE IF NOT EXISTS comunicados (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  titulo TEXT NOT NULL,
+  mensagem TEXT NOT NULL,
+  tipo TEXT NOT NULL DEFAULT 'info' CHECK (tipo IN ('info', 'aviso', 'urgente', 'reuniao')),
+  autor_id TEXT NOT NULL,
+  autor_nome TEXT NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ativo BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_comunicados_criado_em ON comunicados(criado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_comunicados_ativo ON comunicados(ativo);
+
+-- Controle de leitura dos comunicados por usuário
+CREATE TABLE IF NOT EXISTS comunicados_leituras (
+  comunicado_id UUID NOT NULL REFERENCES comunicados(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  lido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (comunicado_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_comunicados_leituras_user ON comunicados_leituras(user_id);

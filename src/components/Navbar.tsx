@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { BookOpen, LayoutDashboard, Users, Bell, LogOut, ShieldCheck, User, CalendarOff, Calendar, BookMarked } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Users, Bell, LogOut, ShieldCheck, User, CalendarOff, Calendar, BookMarked, Megaphone } from 'lucide-react';
 import { AusenciaModal } from './AusenciaModal';
+import { ComunicadosBell } from './ComunicadosBell';
 import { isUsuarioAusente, formatToDateBr } from '@/lib/ausencia';
 
 export const Navbar = () => {
@@ -42,6 +43,7 @@ export const Navbar = () => {
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/diario', label: 'Diário de Bordo', icon: BookMarked },
+    { href: '/comunicados', label: 'Comunicados', icon: Megaphone },
     ...(isAdmin
       ? [
           { href: '/usuarios', label: 'Usuários', icon: Users },
@@ -88,6 +90,9 @@ export const Navbar = () => {
 
           {/* User profile & actions */}
           <div className="flex items-center gap-2.5">
+            {/* Sino de Comunicados */}
+            <ComunicadosBell />
+
             {/* Botão de Afastamento / Ausência */}
             <button
               onClick={() => setIsAusenciaOpen(true)}
