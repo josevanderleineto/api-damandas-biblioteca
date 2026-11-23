@@ -378,8 +378,10 @@ export default function UsersPage() {
                     type="text"
                     required
                     value={matricula}
-                    onChange={(e) => setMatricula(e.target.value)}
+                    onChange={(e) => setMatricula(e.target.value.replace(/\D/g, ''))}
                     placeholder="Matrícula"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3.5 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono"
                   />
                 </div>

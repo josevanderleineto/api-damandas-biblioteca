@@ -39,7 +39,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const nome = normalize(body?.nome);
     const email = normalizeEmail(body?.email);
     const matriculaRaw = body?.matricula;
-    const matricula = typeof matriculaRaw === 'string' ? matriculaRaw : String(matriculaRaw || '');
+    const matricula = String(matriculaRaw || '').replace(/\D/g, '');
     const role = normalize(body?.role || 'colaborador').toLowerCase();
     const senha = String(body?.senha || '').trim();
 
@@ -47,7 +47,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ ok: false, erro: 'ID de usuário inválido.' }, { status: 400 });
     }
 
-    if (!nome || !email || !matricula || !matricula.trim()) {
+    if (!nome || !email || !matricula) {
       return NextResponse.json({ ok: false, erro: 'Campos obrigatórios: nome, email, matricula.' }, { status: 400 });
     }
 

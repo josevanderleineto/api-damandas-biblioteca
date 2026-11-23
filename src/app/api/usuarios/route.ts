@@ -61,11 +61,11 @@ export async function POST(req: Request) {
     const nome = normalize(body?.nome);
     const email = normalizeEmail(body?.email);
     const matriculaRaw = body?.matricula;
-    const matricula = typeof matriculaRaw === 'string' ? matriculaRaw : String(matriculaRaw || '');
+    const matricula = String(matriculaRaw || '').replace(/\D/g, '');
     const senha = String(body?.senha || '');
     const role = normalize(body?.role || 'colaborador').toLowerCase();
 
-    if (!nome || !email || !senha || !matricula || !matricula.trim()) {
+    if (!nome || !email || !senha || !matricula) {
       return NextResponse.json({ ok: false, erro: 'Campos obrigatórios: nome, email, matricula, senha.' }, { status: 400 });
     }
 
