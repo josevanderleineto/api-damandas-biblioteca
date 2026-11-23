@@ -54,6 +54,12 @@ export function isRootCredentials(login: string, senha: string): boolean {
   return rootEnabled() && normalize(login) === getRootLogin() && normalize(senha) === getRootPassword();
 }
 
+export function isValidUserId(id: unknown): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(id || '').trim()
+  );
+}
+
 function formatDateIsoOnly(val: any): string | null {
   if (!val) return null;
   if (val instanceof Date) {
@@ -129,7 +135,7 @@ export async function findUserByEmail(email: string) {
 }
 
 export async function findUserById(id: string) {
-  if (!id || id === 'root' || !/^\d+$/.test(String(id).trim())) {
+  if (!isValidUserId(id)) {
     return null;
   }
   const result = await query(

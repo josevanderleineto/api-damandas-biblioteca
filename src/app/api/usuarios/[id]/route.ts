@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { query } from '@/lib/db';
 import { normalize, normalizeEmail, isValidEmail } from '@/lib/utils';
-import { getUserFromRequest, sanitizeUser, findUserByEmail } from '@/lib/auth';
+import { getUserFromRequest, sanitizeUser, findUserByEmail, isValidUserId } from '@/lib/auth';
 import * as mailer from '@/lib/mailer';
 import * as adminRecipientsService from '@/lib/services/adminRecipientsService';
 
@@ -43,7 +43,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const role = normalize(body?.role || 'colaborador').toLowerCase();
     const senha = String(body?.senha || '').trim();
 
-    if (!userId || userId === 'root' || !/^\d+$/.test(userId)) {
+    if (!isValidUserId(userId)) {
       return NextResponse.json({ ok: false, erro: 'ID de usuário inválido.' }, { status: 400 });
     }
 
@@ -125,7 +125,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     }
 
     const userId = normalize(params?.id);
-    if (!userId || userId === 'root' || !/^\d+$/.test(userId)) return NextResponse.json({ ok: false, erro: 'ID obrigatório ou inválido.' }, { status: 400 });
+    if (!isValidUserId(userId)) return NextResponse.json({ ok: false, erro: 'ID obrigatório ou inválido.' }, { status: 400 });
 
     const usuario = await query('SELECT id, nome, email, matricula, role, ativo FROM users WHERE id = $1', [userId]);
 

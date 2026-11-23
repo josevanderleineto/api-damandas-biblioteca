@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { normalize } from '@/lib/utils';
-import { getUserFromRequest, sanitizeUser } from '@/lib/auth';
+import { getUserFromRequest, sanitizeUser, isValidUserId } from '@/lib/auth';
 import * as mailer from '@/lib/mailer';
 import * as adminRecipientsService from '@/lib/services/adminRecipientsService';
 
@@ -37,7 +37,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const body = await req.json().catch(() => ({}));
     const ativo = !!body?.ativo;
 
-    if (!userId || userId === 'root' || !/^\d+$/.test(userId)) {
+    if (!isValidUserId(userId)) {
       return NextResponse.json({ ok: false, erro: 'ID de usuário inválido.' }, { status: 400 });
     }
 
